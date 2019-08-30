@@ -520,72 +520,72 @@ double cpp_ll_contact(Rcpp::List data, Rcpp::List param, size_t i,
 // for a given number of observed cases under the assumption of a Poisson distribution
 // with mean scale_poisson
 
-double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, SEXP i,
-				  Rcpp::RObject custom_function) {
-
-  size_t N = static_cast<size_t>(data["N"]);
-  if (N < 2) return 0.0;
-  
-  if (custom_function == R_NilValue) {
-        
-    double out = 0.0;
-
-    Rcpp::IntegerVector alpha = param["alpha"];
-    Rcpp::IntegerVector n_cases = data["n_cases"];
-    Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
-    double poisson_scale = param["poisson_scale"];
-    double sumFact = 0;
-    double lambda = 0;
-
-    if (i == R_NilValue) {
-      for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
-	if (alpha[j] != NA_INTEGER) {
-	  //out = R::dpois(potential_colonised,scale_poisson*n_cases, log = true) ;
-	  //sorry quicker with the log dpois formula :-)
-	  lambda = poisson_scale * n_cases[j]; 
-	  sumFact = 0;
-          
-	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
-	    sumFact += log(ii) ;
-	  }
-          
-	  //ln p = -lambda + x*ln(lambda) - Sum_1tox (ln(x))
-	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
-	  
-	}
-      }
-    } else {
-      // only the cases listed in 'i' are retained
-      size_t length_i = static_cast<size_t>(LENGTH(i));
-      Rcpp::IntegerVector vec_i(i);
-      for (size_t k = 0; k < length_i; k++) {
-	size_t j = vec_i[k] - 1; // offset
-	if (alpha[j] != NA_INTEGER) {
-	  lambda = poisson_scale * n_cases[j]; 
-	  sumFact = 0;
-	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
-	    sumFact += log(ii) ;
-	  }
-	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
-	}
-      }
-    }
-        
-    return out;
-  }  else { // use of a customized likelihood function
-    Rcpp::Function f = Rcpp::as<Rcpp::Function>(custom_function);
-        
-    return Rcpp::as<double>(f(data, param));
-  }
-}
-
-double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, size_t i,
-				  Rcpp::RObject custom_function) {
-  SEXP si = PROTECT(Rcpp::wrap(i));
-  double ret = cpp_ll_potential_colonised(data, param, si, custom_function);
-  UNPROTECT(1);
-  return ret;
-}
+// double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, SEXP i,
+// 				  Rcpp::RObject custom_function) {
+// 
+//   size_t N = static_cast<size_t>(data["N"]);
+//   if (N < 2) return 0.0;
+// 
+//   if (custom_function == R_NilValue) {
+// 
+//     double out = 0.0;
+// 
+//     Rcpp::IntegerVector alpha = param["alpha"];
+//     Rcpp::IntegerVector n_cases = data["n_cases"];
+//     Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
+//     double poisson_scale = param["poisson_scale"];
+//     double sumFact = 0;
+//     double lambda = 0;
+// 
+//     if (i == R_NilValue) {
+//       for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
+// 	if (alpha[j] != NA_INTEGER) {
+// 	  //out = R::dpois(potential_colonised,scale_poisson*n_cases, log = true) ;
+// 	  //sorry quicker with the log dpois formula :-)
+// 	  lambda = poisson_scale * n_cases[j];
+// 	  sumFact = 0;
+// 
+// 	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
+// 	    sumFact += log(ii) ;
+// 	  }
+// 
+// 	  //ln p = -lambda + x*ln(lambda) - Sum_1tox (ln(x))
+// 	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
+// 
+// 	}
+//       }
+//     } else {
+//       // only the cases listed in 'i' are retained
+//       size_t length_i = static_cast<size_t>(LENGTH(i));
+//       Rcpp::IntegerVector vec_i(i);
+//       for (size_t k = 0; k < length_i; k++) {
+// 	size_t j = vec_i[k] - 1; // offset
+// 	if (alpha[j] != NA_INTEGER) {
+// 	  lambda = poisson_scale * n_cases[j];
+// 	  sumFact = 0;
+// 	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
+// 	    sumFact += log(ii) ;
+// 	  }
+// 	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
+// 	}
+//       }
+//     }
+// 
+//     return out;
+//   }  else { // use of a customized likelihood function
+//     Rcpp::Function f = Rcpp::as<Rcpp::Function>(custom_function);
+// 
+//     return Rcpp::as<double>(f(data, param));
+//   }
+// }
+// 
+// double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, size_t i,
+// 				  Rcpp::RObject custom_function) {
+//   SEXP si = PROTECT(Rcpp::wrap(i));
+//   double ret = cpp_ll_potential_colonised(data, param, si, custom_function);
+//   UNPROTECT(1);
+//   return ret;
+// }
 
 
 // ---------------------------
@@ -678,7 +678,7 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
 	  q_ab = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
 			     id_in_hosp_matrix[j]-1);
 	  if (q_ab != 0){
-	    out += log(1 - pow((1 - sigma * q_ab), potential_colonised[j])); 
+	    out += log(1 - pow((1 - sigma * q_ab), potential_colonised[alpha[j]-1])); 
 	  }
 	}
       }
@@ -723,27 +723,27 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, size_t i,
 // - p(potential_colonised): see function cpp_ll_potential_colonised
 // - p(patient_transfer): see function cpp_ll_patient_transfer
 
-double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, SEXP i,
-		      Rcpp::RObject custom_functions) {
-
-  if (custom_functions == R_NilValue) {
-    return cpp_ll_potential_colonised(data, param, i) +
-      cpp_ll_patient_transfer(data, param, i);
-  } else { // use of a customized likelihood functions
-    Rcpp::List list_functions = Rcpp::as<Rcpp::List>(custom_functions);
-    return cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
-      cpp_ll_patient_transfer(data, param, i, list_functions["patient_transfer"]);
-  }
-}
-
-
-double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, size_t i,
-			 Rcpp::RObject custom_function) {
-  SEXP si = PROTECT(Rcpp::wrap(i));
-  double ret = cpp_ll_hosp_joint(data, param, si, custom_function);
-  UNPROTECT(1);
-  return ret;
-}
+// double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, SEXP i,
+// 		      Rcpp::RObject custom_functions) {
+// 
+//   if (custom_functions == R_NilValue) {
+//     return cpp_ll_potential_colonised(data, param, i) +
+//       cpp_ll_patient_transfer(data, param, i);
+//   } else { // use of a customized likelihood functions
+//     Rcpp::List list_functions = Rcpp::as<Rcpp::List>(custom_functions);
+//     return cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
+//       cpp_ll_patient_transfer(data, param, i, list_functions["patient_transfer"]);
+//   }
+// }
+// 
+// 
+// double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, size_t i,
+// 			 Rcpp::RObject custom_function) {
+//   SEXP si = PROTECT(Rcpp::wrap(i));
+//   double ret = cpp_ll_hosp_joint(data, param, si, custom_function);
+//   UNPROTECT(1);
+//   return ret;
+// }
 
 
 // ---------------------------
@@ -768,7 +768,7 @@ double cpp_ll_all(Rcpp::List data, Rcpp::List param, SEXP i,
     return cpp_ll_timing_infections(data, param, i) +
       cpp_ll_timing_sampling(data, param, i) +
       cpp_ll_genetic(data, param, i) +
-      cpp_ll_potential_colonised(data, param, i) +
+      // cpp_ll_potential_colonised(data, param, i) +
       cpp_ll_reporting(data, param, i) +
       cpp_ll_contact(data, param, i) +
       cpp_ll_patient_transfer(data, param, i);
@@ -779,7 +779,7 @@ double cpp_ll_all(Rcpp::List data, Rcpp::List param, SEXP i,
     return cpp_ll_timing_infections(data, param, i, list_functions["timing_infections"]) +
       cpp_ll_timing_sampling(data, param, i, list_functions["timing_sampling"]) +
       cpp_ll_genetic(data, param, i, list_functions["genetic"]) +
-      cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
+      // cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
       cpp_ll_reporting(data, param, i, list_functions["reporting"]) +
       cpp_ll_contact(data, param, i, list_functions["contact"]) + 
       cpp_ll_patient_transfer(data, param, i, list_functions("patient_transfer"));

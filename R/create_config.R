@@ -175,18 +175,19 @@ create_config <- function(..., data = NULL) {
                    init_lambda = 0.05,
                    init_sigma = 0.05,
                    init_poisson_scale = 1,
-                   init_potential_colonised = NULL,
-                   move_alpha = TRUE, move_swap_cases = TRUE,
+                   # init_potential_colonised = NULL,
+                   move_alpha = TRUE, 
+                   move_swap_cases = TRUE,
                    move_t_inf = TRUE,
                    move_mu = TRUE, move_kappa = TRUE, move_pi = TRUE,
                    move_eps = TRUE, move_lambda = TRUE, move_sigma = TRUE,
                    move_poisson_scale = TRUE,
-                   move_potential_colonised = TRUE,
+                   # move_potential_colonised = TRUE,
                    n_iter = 1e4, sample_every = 50,
                    sd_mu = 0.0001, sd_pi = 0.1,
                    sd_eps = 0.1, sd_lambda = 0.05, sd_sigma = 0.05,
                    sd_poisson_scale = 0.1,
-                   sd_potential_colonised = 1,
+                   # sd_potential_colonised = 1,
                    prop_alpha_move = 1/4,
                    prop_t_inf_move = 0.2,
                    paranoid = FALSE,
@@ -333,17 +334,17 @@ create_config <- function(..., data = NULL) {
     stop("init_poisson_scale is infinite or NA")
   }
 
-  ## check init_potential_colonised
-  if(!is.null(config$init_potential_colonised)) {
-    if (!is.numeric(config$init_potential_colonised)) {
-      stop("init_potential_colonised must be numeric")
-    }
-    if (any(config$init_potential_colonised %% 1 > 1e-10) |
-        any(config$init_potential_colonised < 0)) {
-      stop("init_potential_colonised must be integers")
-    }
-    config$init_potential_colonised <- as.integer(config$init_potential_colonised)
-  }
+  # ## check init_potential_colonised
+  # if(!is.null(config$init_potential_colonised)) {
+  #   if (!is.numeric(config$init_potential_colonised)) {
+  #     stop("init_potential_colonised must be numeric")
+  #   }
+  #   if (any(config$init_potential_colonised %% 1 > 1e-10) |
+  #       any(config$init_potential_colonised < 0)) {
+  #     stop("init_potential_colonised must be integers")
+  #   }
+  #   config$init_potential_colonised <- as.integer(config$init_potential_colonised)
+  # }
 
   ## check move_alpha
   if (!all(is.logical(config$move_alpha))) {
@@ -417,13 +418,13 @@ create_config <- function(..., data = NULL) {
     stop("move_sigma is NA")
   }
   
-  ## check move_potential_colonised
-  if (!all(is.logical(config$move_potential_colonised))) {
-    stop("move_potential_colonised is not a logical")
-  }
-  if (any(is.na(config$move_potential_colonised))) {
-    stop("move_potential_colonised is NA")
-  }
+  # ## check move_potential_colonised
+  # if (!all(is.logical(config$move_potential_colonised))) {
+  #   stop("move_potential_colonised is not a logical")
+  # }
+  # if (any(is.na(config$move_potential_colonised))) {
+  #   stop("move_potential_colonised is NA")
+  # }
 
   ## check move_poisson_scale
   if (!all(is.logical(config$move_poisson_scale))) {
@@ -524,16 +525,16 @@ create_config <- function(..., data = NULL) {
     stop("sd_poisson_scale is infinite or NA")
   }
 
-  ## check sd_potential_colonised
-  if (!is.numeric(config$sd_potential_colonised)) {
-    stop("sd_potential_colonised is not a numeric value")
-  }
-  if (config$sd_potential_colonised < 1e-10) {
-    stop("sd_potential_colonised is close to zero or negative")
-  }
-  if (!is.finite(config$sd_potential_colonised)) {
-    stop("sd_potential_colonised is infinite or NA")
-  }
+  # ## check sd_potential_colonised
+  # if (!is.numeric(config$sd_potential_colonised)) {
+  #   stop("sd_potential_colonised is not a numeric value")
+  # }
+  # if (config$sd_potential_colonised < 1e-10) {
+  #   stop("sd_potential_colonised is close to zero or negative")
+  # }
+  # if (!is.finite(config$sd_potential_colonised)) {
+  #   stop("sd_potential_colonised is infinite or NA")
+  # }
 
   ## check prop_alpha_move
   if (!is.numeric(config$prop_alpha_move)) {
@@ -789,9 +790,9 @@ create_config <- function(..., data = NULL) {
     ## recycle move_kappa
     config$move_kappa <- rep(config$move_kappa, length.out = data$N)
     
-    ## recycle move_potential_colonised
-    config$move_potential_colonised <- rep(config$move_potential_colonised,
-                                           length.out = data$N)
+    # ## recycle move_potential_colonised
+    # config$move_potential_colonised <- rep(config$move_potential_colonised,
+    #                                        length.out = data$N)
 
     ## recycle init_kappa
     config$init_kappa <- rep(config$init_kappa, length.out = data$N)
@@ -820,12 +821,12 @@ create_config <- function(..., data = NULL) {
       config$move_sigma <- FALSE
     }
 
-    ## check init_potential_colonised
-    if(!is.null(config$init_potential_colonised) &
-       length(config$init_potential_colonised) !=
-       length(config$init_alpha)) {
-      stop("init_potential_colonised must be of length N")
-    }
+    # ## check init_potential_colonised
+    # if(!is.null(config$init_potential_colonised) &
+    #    length(config$init_potential_colonised) !=
+    #    length(config$init_alpha)) {
+    #   stop("init_potential_colonised must be of length N")
+    # }
     
   }
 
