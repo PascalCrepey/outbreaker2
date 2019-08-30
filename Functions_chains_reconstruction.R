@@ -4,24 +4,24 @@ library(crosstalk)
 ##################################################
 #### Functions for estimating generation time ####
 ##################################################
-# Estimation of generation time #
-generation_time <- function(x){
-  if(x[,.N] > 1){
-    x[, t_lag := c(NA, x[1:(.N-1), t])]
-    x[, w := t - t_lag]
-  }
-  else
-    x[, ":=" (t_lag = NA,
-               w = NA)]
-
-}
-
-# Finding the origin hospital #
-get_origin <- function(x)
-{
-  x[, from := c(NA, x[1:(.N-1), hospID])]
-  setnames(x, c("t","hospID"), c("time","to"))
-}
+# # Estimation of generation time #
+# generation_time <- function(x){
+#   if(x[,.N] > 1){
+#     x[, t_lag := c(NA, x[1:(.N-1), t])]
+#     x[, w := t - t_lag]
+#   }
+#   else
+#     x[, ":=" (t_lag = NA,
+#                w = NA)]
+# 
+# }
+# 
+# # Finding the origin hospital #
+# get_origin <- function(x)
+# {
+#   x[, from := c(NA, x[1:(.N-1), hospID])]
+#   setnames(x, c("t","hospID"), c("time","to"))
+# }
 
 ####################################
 #### Function to compute priors ####

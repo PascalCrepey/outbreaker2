@@ -23,7 +23,7 @@ source("./Functions_chains_reconstruction.R")
 # min.support <- c(0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 # Number of MCMC iterations #
 # n_iter_mcmc <- c(1000,2500,5000,10000,20000,30000,50000)
-n_iter_mcmc <- 50000
+n_iter_mcmc <- 5000
 n_sample <- 1
 
 # Compute or not priors for alpha (ancestors) #
@@ -55,25 +55,13 @@ fakeMat <- fakeMat / rowSums(fakeMat)
 # patients
 fakeMat[is.nan(fakeMat)] <- 0 
 
-########################################################
-#### Estimating the distribution of generation time ####
-########################################################
-## Using the chains results ##
-chains_detect100 <- lapply(chains_detect100, generation_time)
-# chains_detect100 <- lapply(chains_detect100, get_origin)
-
+#######################################################
+#### Preparation of real transmission chains' data ####
+#######################################################
 chains_detect100_bind <- rbindlist(chains_detect100)
 setnames(chains_detect100_bind, 
          c("hospID","origin"),
          c("to","from"))
-
-hist(chains_detect100_bind$w)
-
-dist.w <- fitdist(chains_detect100_bind[!is.na(w),w],"nbinom")
-
-w <- dnbinom(1:50, 
-             size = dist.w$estimate[1],
-             mu = dist.w$estimate[2])
 
 # Keeping in mind the chains #
 counter <- 0
@@ -94,24 +82,42 @@ chains_detect100_bind <- merge(chains_detect100_bind,
 detect100[,num := seq_len(.N)]
 
 chains_detect100_bind.2 <- merge(chains_detect100_bind,
-                                 detect100[,.(hospID, t_detect, num)],
+                                 detect100[,.(hospID, t_descendant = t,
+                                              t_detect_descendant = t_detect, 
+                                              num)],
                                  by.x = c("to", "t_detect"),
-                                 by.y = c("hospID","t_detect"))
+                                 by.y = c("hospID","t_detect_descendant"))
 chains_detect100_bind.2 <- merge(chains_detect100_bind.2,
-                                 detect100[,.(hospID, t, num)],
+                                 detect100[,.(hospID, 
+                                              t_ancestor = t, 
+                                              num)],
                                  by.x = c("from"),
                                  by.y = c("hospID"),
                                  all.x=TRUE)
-chains_detect100_bind.2 <- chains_detect100_bind.2[t.y<t.x | is.na(from)]
-chains_detect100_bind.2 <- chains_detect100_bind.2[order(to, t.x, t.y)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[t_ancestor<t | is.na(from)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[order(to, t, t_ancestor)]
 chains_detect100_bind.2 <- chains_detect100_bind.2[,.SD[.N],
-                                                   by = c("from", "to", "t.x")]
-chains_detect100_bind.2[, t.y := NULL]
-setnames(chains_detect100_bind.2, c("t.x","num.x","num.y"), c("t","ids_to","ids_from"))
+                                                   by = c("from", "to", "t")]
+# chains_detect100_bind.2[, t.y := NULL]
+setnames(chains_detect100_bind.2, c("num.x","num.y"), c("ids_to","ids_from"))
 
 detect100[, num := NULL]
 
 chains_detect100_bind <- chains_detect100_bind.2
+
+#################################################
+#### Estimating generation time distribution ####
+#################################################
+chains_detect100_bind[, generation_time := t - t_ancestor]
+
+hist(chains_detect100_bind$generation_time)
+
+generation_time.dist <- as.data.table(prop.table(table(chains_detect100_bind$generation_time)))
+setnames(generation_time.dist, 
+         c("V1", "N"),
+         c("generation_time", "p"))
+
+w <- generation_time.dist[, p]
 
 ################################
 #### Chains' reconstruction ####
