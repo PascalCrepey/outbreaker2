@@ -1,5 +1,7 @@
 library(plotly)
 library(crosstalk)
+library(ggplot2)
+library(ggrepel)
 
 ##################################################
 #### Functions for estimating generation time ####
@@ -290,7 +292,7 @@ ComputeParametersLinks <- function(data, min.support = NULL, type, outbreaker_da
                                                       fp = get(paste0("fp_links.",type))))      
     
     # Negative predictive value #
-    assign(paste0("pnv_links.",type),pnv_links(tn = get(paste0("tn_links.",type)),
+    assign(paste0("npv_links.",type),npv_links(tn = get(paste0("tn_links.",type)),
                                                       fn = get(paste0("fn_links.",type))))
     
     returnList <- list(get(paste0("tp_links.",type)),
@@ -300,7 +302,7 @@ ComputeParametersLinks <- function(data, min.support = NULL, type, outbreaker_da
                        get(paste0("se_links.",type)),
                        get(paste0("sp_links.",type)),
                        get(paste0("ppv_links.",type)),
-                       get(paste0("pnv_links.",type)))
+                       get(paste0("npv_links.",type)))
     
     names(returnList) <- c(paste0("tp_links.",type),
                            paste0("fp_links.",type),
@@ -309,7 +311,7 @@ ComputeParametersLinks <- function(data, min.support = NULL, type, outbreaker_da
                            paste0("se_links.",type),
                            paste0("sp_links.",type),
                            paste0("ppv_links.",type),
-                           paste0("pnv_links.",type))
+                           paste0("npv_links.",type))
   
   return(returnList)
 }
@@ -356,7 +358,7 @@ ppv_links <- function(tp, fp){
 }
 
 # Auxiliary function to compute the predictive negative value regarding links reconstruction #
-pnv_links <- function(tn, fn){
+npv_links <- function(tn, fn){
   return(tn/(tn + fn))
 }
 
@@ -453,8 +455,13 @@ ComputeParametersChains_chainlength <- function(data, min_support = NULL, real_d
 ###########################################
 #### Functions to represent parameters ####
 ###########################################
-PlotROC <- function(se, sp, type.plot){
-  data <- data.table(x = 1 - sp, y = se)
+PlotROC <- function(se, sp, min.support, type.plot){
+  data <- data.table(x = 1 - sp, 
+                     y = se,
+                     min.support = as.character(round(min.support,4)))
+  data[, no_line := .I]
+  data[!no_line %in% seq(1,.N,10),
+       min.support := ""]
   
   FigPlot<-ggplot(data = data, aes(x = x, y = y)) + 
     geom_line() +
@@ -468,7 +475,9 @@ PlotROC <- function(se, sp, type.plot){
                  colour = "red", linetype = 2, size = 0.75)
   
   if(type.plot == "ggplot"){
-    FigPlot
+    FigPlot +
+      geom_text_repel(label = data$min.support,
+                      box.padding = 1)
   }
   else if(type.plot == "plotly"){
     ggplotly(FigPlot)
