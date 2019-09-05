@@ -622,33 +622,18 @@ double cpp_ll_timing(Rcpp::List data, Rcpp::List param, size_t i,
 
 // ---------------------------
 
-// This likelihood corresponds to the probability of observing a reported
-// contact between cases and their ancestors. See
-// src/likelihoods.cpp for details of the Rcpp implmentation.
-
-// The likelihood is based on the contact status between a case and its
-// ancestor; this is extracted from a pairwise contact matrix (data$C), the
-// log-likelihood is computed as:
-// true_pos*eps + false_pos*eps*xi +
-// false_neg*(1- eps) + true_neg*(1 - eps*xi)
-//
-// with:
-// 'eps' is the contact reporting coverage
-// 'lambda' is the non-infectious contact rate
-// 'true_pos' is the number of contacts between transmission pairs
-// 'false_pos' is the number of contact between non-transmission pairs
-// 'false_neg' is the number of transmission pairs without contact
-// 'true_neg' is the number of non-transmission pairs without contact
-
 // The likelihood is based on the patient transfer matrix and the probability
-// that an unobserved colonized patients will be moved from hospital A to 
-// hospital B. This probability is given by : 
-// p(A->B) = 1 - (1 - sigma * q_ab)^N_unobs
+// that an unobserved colonized patients from hospital A will colonised hospital B
+// without being colonised by another hospital l which could be the ancestor of B.
+// This probability is given by : 
+// p(A->B) = (1 - (1 - sigma * q_alpha_b)^N_unobs_alpha)*PI((1 - sigma * q_l_b)^N_unobs_l)
 //
 // with:
 // sigma being the parameter controling the probability of being transfered
-// q_ab being the probability of being transfered to b when you're leaving a
-// N_unobs
+// q_alpha_b being the probability of being transfered to B when you're leaving A
+// N_unobs_alpha being the number of unobserved colonised patient in A
+// q_l_b being the probability of being transfered to B when you're leaving an hospital l
+// N_unobs_l being the number of unobserved colonised patient in hospital l
 
 double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
                       Rcpp::RObject custom_function) {
@@ -659,11 +644,15 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
   Rcpp::NumericMatrix hosp_matrix = data["hosp_matrix"];
   if (hosp_matrix.ncol() < 1) return 0.0;
   
+  Rcpp::LogicalMatrix can_be_ances_matrix = data["can_be_ances"];
+  
   if (custom_function == R_NilValue) {
     
     double out = 0;
-    double q_ab = 0;
+    double q_alpha_b = 0;
+    double q_lb = 0;
     double sigma = Rcpp::as<double>(param["sigma"]);
+    double product = 1; //To keep the results of the product of probabilities of non transmission of others facilities
     Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
     Rcpp::IntegerVector alpha = param["alpha"];
     Rcpp::IntegerVector id_in_hosp_matrix = data["id_in_hosp_matrix"];
@@ -674,24 +663,35 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
     
     if (i == R_NilValue) {
       for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
-	if (alpha[j] != NA_INTEGER) {
-	  q_ab = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
-			     id_in_hosp_matrix[j]-1);
-	  if (q_ab != 0){
-	    out += log(1 - pow((1 - sigma * q_ab), potential_colonised[alpha[j]-1])); 
-	  }
-	}
+        product = 1;
+        if (alpha[j] != NA_INTEGER) {
+          // Estimating the probability of not being colonised by a facility other than the ancestor one
+          for (size_t l = 0; l < can_be_ances_matrix.nrow(); l++) {
+            if (can_be_ances_matrix(l,j) & l!=(alpha[j]-1)) {
+              q_lb = hosp_matrix(id_in_hosp_matrix[l]-1,
+                                 id_in_hosp_matrix[j]-1);
+              product *= pow((1 - sigma * q_lb), potential_colonised[l]);
+            }
+          }
+          // Adding the probability of transmission from the considered ancestor 
+          q_alpha_b = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
+                                  id_in_hosp_matrix[j]-1);
+          if (q_alpha_b != 0){
+            out += log((1 - pow((1 - sigma * q_alpha_b), potential_colonised[alpha[j]-1])) * product); 
+          }
+        }
       }
     } else {
+      // TO BE MODIFIED ACCORDING TO PREVIOUS SECTION 
       // only the cases listed in 'i' are retained
       size_t length_i = static_cast<size_t>(LENGTH(i));
       Rcpp::IntegerVector vec_i(i);
       for (size_t k = 0; k < length_i; k++) {
 	size_t j = vec_i[k] - 1; // offset
 	if (alpha[j] != NA_INTEGER) {
-	  q_ab = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
+	  q_alpha_b = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
 			     id_in_hosp_matrix[j]-1);
-	  out += log(1 - pow((1 - sigma * q_ab), potential_colonised[j]));
+	  out += log(1 - pow((1 - sigma * q_alpha_b), potential_colonised[j]));
 	}
       }
     }
