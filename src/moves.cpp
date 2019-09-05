@@ -50,9 +50,7 @@ Rcpp::List cpp_move_poisson_scale(Rcpp::List param, Rcpp::List data, Rcpp::List 
   new_poisson_scale[0] += R::rnorm(0.0, sd_poisson_scale); // new proposed value
   
   for (size_t i = 0; i < N; i++) {
-    if (alpha[i] != NA_INTEGER) {
-      new_potential_colonised[i] = static_cast<int>(new_poisson_scale[0]*n_cases[i]);
-    }
+      new_potential_colonised[i] = std::round((new_poisson_scale[0]*n_cases[i]));
   }
   
   // automatic rejection of negative poisson_scale
@@ -64,7 +62,6 @@ Rcpp::List cpp_move_poisson_scale(Rcpp::List param, Rcpp::List data, Rcpp::List 
   old_logpost = cpp_ll_patient_transfer(data, param, R_NilValue, custom_ll);
   new_logpost = cpp_ll_patient_transfer(data, new_param, R_NilValue, custom_ll);
   
-  
   // compute priors
   
   old_logpost += cpp_prior_poisson_scale(param, config, custom_prior);
@@ -73,7 +70,6 @@ Rcpp::List cpp_move_poisson_scale(Rcpp::List param, Rcpp::List data, Rcpp::List 
   // acceptance term
   
   p_accept = exp(new_logpost - old_logpost);
-  
   
   // acceptance: the new value is already in mu, so we only act if the move is
   // rejected, in which case we restore the previous ('old') value

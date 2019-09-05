@@ -175,7 +175,7 @@ create_config <- function(..., data = NULL) {
                    init_lambda = 0.05,
                    init_sigma = 0.05,
                    init_poisson_scale = 1,
-                   # init_potential_colonised = NULL,
+                   init_potential_colonised = NULL,
                    move_alpha = TRUE, 
                    move_swap_cases = TRUE,
                    move_t_inf = TRUE,
@@ -334,17 +334,17 @@ create_config <- function(..., data = NULL) {
     stop("init_poisson_scale is infinite or NA")
   }
 
-  # ## check init_potential_colonised
-  # if(!is.null(config$init_potential_colonised)) {
-  #   if (!is.numeric(config$init_potential_colonised)) {
-  #     stop("init_potential_colonised must be numeric")
-  #   }
-  #   if (any(config$init_potential_colonised %% 1 > 1e-10) |
-  #       any(config$init_potential_colonised < 0)) {
-  #     stop("init_potential_colonised must be integers")
-  #   }
-  #   config$init_potential_colonised <- as.integer(config$init_potential_colonised)
-  # }
+  ## check init_potential_colonised
+  if(!is.null(config$init_potential_colonised)) {
+    if (!is.numeric(config$init_potential_colonised)) {
+      stop("init_potential_colonised must be numeric")
+    }
+    if (any(config$init_potential_colonised %% 1 > 1e-10) |
+        any(config$init_potential_colonised < 0)) {
+      stop("init_potential_colonised must be integers")
+    }
+    config$init_potential_colonised <- as.integer(config$init_potential_colonised)
+  }
 
   ## check move_alpha
   if (!all(is.logical(config$move_alpha))) {
