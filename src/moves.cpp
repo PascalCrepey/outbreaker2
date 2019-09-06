@@ -242,7 +242,7 @@ Rcpp::List cpp_move_sigma(Rcpp::List param, Rcpp::List data, Rcpp::List config,
     
     // automatic rejection of sigma outside [0;1]
     
-    if (new_sigma[0] < 0.0 || new_sigma[0] > 1.0) {
+    if (new_sigma[0] < 0.0 || new_sigma[0] >= 1.0) {
         return param;
     }
     

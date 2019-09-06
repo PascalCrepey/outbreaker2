@@ -644,8 +644,6 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
   Rcpp::NumericMatrix hosp_matrix = data["hosp_matrix"];
   if (hosp_matrix.ncol() < 1) return 0.0;
   
-  Rcpp::LogicalMatrix can_be_ances_matrix = data["can_be_ances"];
-  
   if (custom_function == R_NilValue) {
     
     double out = 0;
@@ -656,6 +654,8 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
     Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
     Rcpp::IntegerVector alpha = param["alpha"];
     Rcpp::IntegerVector id_in_hosp_matrix = data["id_in_hosp_matrix"];
+    Rcpp::IntegerVector t_inf = param["t_inf"];
+    Rcpp::IntegerVector ids_facilities = Rcpp::seq_len(N)-1;
 
     if (sigma < 0.0) {
       return R_NegInf;
@@ -664,14 +664,20 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
     if (i == R_NilValue) {
       for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
         product = 1;
+        // Rcpp::Rcout << "j = " << j << std::endl;
+        // Rcpp::Rcout << "alpha = " << alpha[j] << std::endl;
         if (alpha[j] != NA_INTEGER) {
           // Estimating the probability of not being colonised by a facility other than the ancestor one
-          for (size_t l = 0; l < can_be_ances_matrix.nrow(); l++) {
-            if (can_be_ances_matrix(l,j) & l!=(alpha[j]-1)) {
-              q_lb = hosp_matrix(id_in_hosp_matrix[l]-1,
+          Rcpp::LogicalVector loop_boolean = t_inf < t_inf[j]; // Identification of possible ancestors
+          loop_boolean[alpha[j]-1] = FALSE; // Exclusion of the ancestor of j
+          Rcpp::IntegerVector loop = ids_facilities[loop_boolean]; // Selection of corresponding ids
+          
+          for (size_t l = 0; l < loop.size(); l++) {
+              q_lb = hosp_matrix(id_in_hosp_matrix[loop[l]]-1,
                                  id_in_hosp_matrix[j]-1);
-              product *= pow((1 - sigma * q_lb), potential_colonised[l]);
-            }
+            if(q_lb)
+              product *= pow((1 - sigma * q_lb), potential_colonised[loop[l]]);
+
           }
           // Adding the probability of transmission from the considered ancestor 
           q_alpha_b = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
