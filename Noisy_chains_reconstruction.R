@@ -21,7 +21,7 @@ source("./Functions_chains_reconstruction.R")
 cores = 16
 runs = 100
 
-n_iter_mcmc <- 250000
+n_iter_mcmc <- 100000
 n_sample <- n_iter_mcmc*0.0001
 
 # Compute or not priors for alpha (ancestors) #
@@ -32,10 +32,17 @@ min.support <- 10^(-seq(0, 4, by = 0.05))
 
 # Initialization of poisson scale #
 init_poisson_scale <- 1
+move_poisson_scale <- TRUE
 
 # Adding noise on dates of infection #
 adding_noise <- TRUE
 lambda_noise <- 3.5
+
+# Other parameters #
+move_sigma <- FALSE
+init_sigma <- 0.99
+move_pi <- TRUE
+init_pi <- 1
 
 #############################
 #### Preparation of data ####
@@ -135,10 +142,15 @@ out = mclapply(1:runs, mc.cores = cores, FUN = function(line) {
                                 n_iter_mcmc = n_iter_mcmc, 
                                 n_sample = n_sample, 
                                 min.support = min.support,
-                                prior_alpha = prior_alpha, 
-                                init_poisson_scale = init_poisson_scale, 
+                                prior_alpha = prior_alpha,
                                 adding_noise = adding_noise, 
-                                lambda_noise = lambda_noise)
+                                lambda_noise = lambda_noise,
+                                move_sigma = move_sigma,
+                                init_sigma = init_sigma,
+                                move_pi = move_pi,
+                                init_pi = init_pi,
+                                init_poisson_scale = init_poisson_scale, 
+                                move_poisson_scale = move_poisson_scale)
   return(output)
 })
 

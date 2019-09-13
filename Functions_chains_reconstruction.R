@@ -466,8 +466,11 @@ ComputeParametersChains_chainlength <- function(data, min_support = NULL, real_d
 ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
                                  detect100, chains_detect100_bind, 
                                  n_iter_mcmc, n_sample, min.support,
-                                 prior_alpha, init_poisson_scale,
-                                 adding_noise, lambda_noise){
+                                 prior_alpha,
+                                 adding_noise, lambda_noise,
+                                 init_poisson_scale, move_poisson_scale,
+                                 init_sigma, move_sigma,
+                                 init_pi, move_pi){
   ## Adding noise on dates if needed ##
   if(adding_noise){
     dates <- round(dates + rpois(length(dates), 
@@ -504,7 +507,7 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
   
   # Config parameters #
   config <- create_config(prior_poisson_scale = c(1, 1),
-                          move_poisson_scale = TRUE,
+                          move_poisson_scale = move_poisson_scale,
                           init_potential_colonised = n_cases*init_poisson_scale,
                           # sd_potential_colonised = 5,
                           pb = TRUE,
@@ -515,10 +518,10 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
                           n_iter = n_iter_mcmc, 
                           sample_every = n_sample,
                           init_poisson_scale = init_poisson_scale,
-                          move_sigma = TRUE,
-                          init_sigma = 0.9,
-                          move_pi = TRUE,
-                          init_pi = 1)
+                          move_sigma = move_sigma,
+                          init_sigma = init_sigma,
+                          move_pi = move_pi,
+                          init_pi = init_pi)
   
   # Reconstruction of chains #
   results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker, 
