@@ -4,25 +4,23 @@
 library(outbreaker2)
 library(data.table)
 library(fitdistrplus)
+library(parallel)
 
 ###################################
 #### Loading of simulated data ####
 ###################################
-load("../StageCRENet/hackathon/outbreaker/fakeMat.Rdata")
-load("../StageCRENet/hackathon/outbreaker/data/data1.Rdata")
-load("../StageCRENet/hackathon/outbreaker/chains/chains1.Rdata")
+load("./fakeMat.Rdata")
+load("./data1.Rdata")
+load("./chains1.Rdata")
 
 source("./Functions_chains_reconstruction.R")
 
 ###########################
 #### Global parameters ####
 ###########################
-# # Allowed difference between time of infection found in bayesian output and time of detection #
-# allowed.diff <- c(0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.75, 1.0)
-# Minimum support #
-# min.support <- c(0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
-# Number of MCMC iterations #
-# n_iter_mcmc <- c(1000,2500,5000,10000,20000,30000,50000)
+cores = 16
+runs = 100
+
 n_iter_mcmc <- 250000
 n_sample <- n_iter_mcmc*0.0001
 
@@ -36,7 +34,7 @@ min.support <- 10^(-seq(0, 4, by = 0.05))
 init_poisson_scale <- 1
 
 # Adding noise on dates of infection #
-adding_noise <- FALSE
+adding_noise <- TRUE
 lambda_noise <- 3.5
 
 #############################
@@ -126,93 +124,26 @@ w <- generation_time.dist[, p]
 ################################
 #### Chains' reconstruction ####
 ################################
-## Adding noise on dates if needed ##
-if(adding_noise){
-  dates <- round(dates + rpois(length(dates), 
-                               lambda = lambda_noise), 0)
-  dates[which(dates < 0)] <- 0
-}
-
-# Data #
-data_outbreaker <- outbreaker_data(dates = dates,
-                                   w_dens = w,
-                                   n_cases = n_cases,
-                                   hosp_matrix = fakeMat,
-                                   ids = ids)
-
-## Identification of imported cases ##
-check.importation <- merge(detect100[, n_line := seq_len(.N)],
-                           chains_detect100_bind,
-                           by.x = c("hospID", "t_detect"),
-                           by.y = c("to", "t_detect"))
-detect100[check.importation[is.na(from) & imported == 0, n_line], 
-          imported := 1]
-detect100[, n_line := NULL]
-imported <- ifelse(detect100[, imported] == 1 | 
-                     detect100[, t_detect] == 1, NA_integer_, 1)
-
-if(prior_alpha == T){
-  ## Computing priors for alpha ##
-  imported <- sapply(seq_len(length(imported)), 
-                     FUN = prior_ancestor,
-                     imported = imported,
-                     data_outbreaker = data_outbreaker,
-                     fakeMat = fakeMat)
-}
-
-# Config parameters #
-config <- create_config(prior_poisson_scale = c(1, 1),
-                        move_poisson_scale = TRUE,
-                        init_potential_colonised = n_cases*init_poisson_scale,
-                        # sd_potential_colonised = 5,
-                        pb = TRUE,
-                        find_import = FALSE,
-                        outlier_threshold = 5,
-                        data = data_outbreaker,
-                        init_tree = imported,
-                        n_iter = n_iter_mcmc, 
-                        sample_every = n_sample,
-                        init_poisson_scale = init_poisson_scale,
-                        move_sigma = TRUE,
-                        init_sigma = 0.9,
-                        move_pi = TRUE,
-                        init_pi = 1)
-
-# Reconstruction of chains #
-results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker, 
-                                n_iter_mcmc = n_iter_mcmc,
-                                ids = ids, 
-                                config = config)
-
-
-##################################
-#### Estimation of parameters ####
-##################################
-parameters <- ComputeParameters(results_bayesian = results_mcmc,
-                                data_outbreaker = data_outbreaker,
-                                real_data = chains_detect100_bind,
+out = mclapply(1:runs, mc.cores = cores, FUN = function(line) {
+  output = ChainsReconstruction(dates = dates, 
+                                w = w, 
+                                n_cases = n_cases, 
+                                fakeMat = fakeMat, 
+                                ids = ids,
+                                detect100 = detect100, 
+                                chains_detect100_bind = chains_detect100_bind, 
+                                n_iter_mcmc = n_iter_mcmc, 
+                                n_sample = n_sample, 
                                 min.support = min.support,
-                                burning = n_iter_mcmc*0.01,
-                                init_alpha = imported)
+                                prior_alpha = prior_alpha, 
+                                init_poisson_scale = init_poisson_scale, 
+                                adding_noise = adding_noise, 
+                                lambda_noise = lambda_noise)
+  return(output)
+})
 
-save(results_mcmc, parameters,
-     file = paste0("./tmp_results/20190902/1-results_mcmc_",n_iter_mcmc,"_",n_sample,"_prioralpha_1.RData"))
+saveRDS(out, file = paste0("1-results_",n_iter_mcmc,"_",n_sample,"_prioralpha.rds"))
 
-############################
-#### Plot of ROC curves ####
-############################
-PlotROC(se = parameters$parameters_links_aa$se_links.aa,
-        sp = parameters$parameters_links_aa$sp_links.aa,
-        min.support = min.support,
-        type.plot = "ggplot")
-
-Plot_se_ppv(se = parameters$parameters_links_aa$se_links.aa,
-            ppv = parameters$parameters_links_aa$ppv_links.aa,
-            type.plot = "ggplot")
-
-# PlotChains(parameters_chains = parameters$parameters_chains_aa,
-#            minimal_support = parameters$minimal_support,
-#            type.plot = "ggplot")
 
 
 

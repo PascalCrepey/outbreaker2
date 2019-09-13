@@ -140,7 +140,7 @@ get_labels <- function(x, labels = NULL) {
 ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.support,
                               burning = 0, init_alpha){
   ## Preparing data (merging with real data) ##
-  cat("--- Preparing data ---")
+  # cat("--- Preparing data ---")
   if(burning < 0) 
     stop("Burning period must be positive")
   else if(max(results_bayesian$res$step) < burning)
@@ -167,6 +167,10 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
                        by.x = c("from","to"),
                        by.y = c("ids_from","ids_to"),
                        all = TRUE)
+    
+    shannon_entropy <- quantile(results_bayesian$res_aa[to %in% real_data[,ids_to],
+                                       .(result=-sum(support*log(support))), by="to"][,result],
+                                seq(0,1,0.25))
   }
   else{ # Considering a burning period
     # Calculating consensus and all ancestors with burning period #
@@ -193,6 +197,10 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
                        by.x = c("from","to"),
                        by.y = c("ids_from","ids_to"),
                        all = TRUE)
+    
+    shannon_entropy <- quantile(tmp$aa[to %in% real_data[,ids_to],
+                                       .(result=-sum(support*log(support))), by="to"][,result],
+                                seq(0,1,0.25))
   } 
   
   ## We only keep the links in real_data ##
@@ -236,6 +244,7 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
                                     min.support)
   
   return(list(minimal_support = min.support,
+              shannon_entropy = shannon_entropy,
               parameters_links_consensus = parameters_links_consensus,
               parameters_chains_consensus = list(global_chains_consensus = global_chains_consensus,
                                                  bylength_chains_consensus = bylength_chains_consensus),
@@ -451,6 +460,83 @@ ComputeParametersChains_chainlength <- function(data, min_support = NULL, real_d
   return(chains_by_length[,.(length_chain, percentage_reconstructed)])
 }
 
+########################################
+#### Function to reconstruct chains ####
+########################################
+ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
+                                 detect100, chains_detect100_bind, 
+                                 n_iter_mcmc, n_sample, min.support,
+                                 prior_alpha, init_poisson_scale,
+                                 adding_noise, lambda_noise){
+  ## Adding noise on dates if needed ##
+  if(adding_noise){
+    dates <- round(dates + rpois(length(dates), 
+                                 lambda = lambda_noise), 0)
+    dates[which(dates < 0)] <- 0
+  }
+  
+  # Data #
+  data_outbreaker <- outbreaker_data(dates = dates,
+                                     w_dens = w,
+                                     n_cases = n_cases,
+                                     hosp_matrix = fakeMat,
+                                     ids = ids)
+  
+  ## Identification of imported cases ##
+  check.importation <- merge(detect100[, n_line := seq_len(.N)],
+                             chains_detect100_bind,
+                             by.x = c("hospID", "t_detect"),
+                             by.y = c("to", "t_detect"))
+  detect100[check.importation[is.na(from) & imported == 0, n_line], 
+            imported := 1]
+  detect100[, n_line := NULL]
+  imported <- ifelse(detect100[, imported] == 1 | 
+                       detect100[, t_detect] == 1, NA_integer_, 1)
+  
+  if(prior_alpha == T){
+    ## Computing priors for alpha ##
+    imported <- sapply(seq_len(length(imported)), 
+                       FUN = prior_ancestor,
+                       imported = imported,
+                       data_outbreaker = data_outbreaker,
+                       fakeMat = fakeMat)
+  }
+  
+  # Config parameters #
+  config <- create_config(prior_poisson_scale = c(1, 1),
+                          move_poisson_scale = TRUE,
+                          init_potential_colonised = n_cases*init_poisson_scale,
+                          # sd_potential_colonised = 5,
+                          pb = TRUE,
+                          find_import = FALSE,
+                          outlier_threshold = 5,
+                          data = data_outbreaker,
+                          init_tree = imported,
+                          n_iter = n_iter_mcmc, 
+                          sample_every = n_sample,
+                          init_poisson_scale = init_poisson_scale,
+                          move_sigma = TRUE,
+                          init_sigma = 0.9,
+                          move_pi = TRUE,
+                          init_pi = 1)
+  
+  # Reconstruction of chains #
+  results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker, 
+                                  n_iter_mcmc = n_iter_mcmc,
+                                  ids = ids, 
+                                  config = config)
+  
+  ## Estimation of parameters ##
+  parameters <- ComputeParameters(results_bayesian = results_mcmc,
+                                  data_outbreaker = data_outbreaker,
+                                  real_data = chains_detect100_bind,
+                                  min.support = min.support,
+                                  burning = n_iter_mcmc*0.01,
+                                  init_alpha = imported)
+  
+  return(list(results_mcmc = results_mcmc,
+              parameters = parameters))
+}
 
 ###########################################
 #### Functions to represent parameters ####
