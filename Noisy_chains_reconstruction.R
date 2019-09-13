@@ -23,6 +23,7 @@ runs = 100
 
 n_iter_mcmc <- 100000
 n_sample <- n_iter_mcmc*0.0001
+burning <- n_iter_mcmc*0.01
 
 # Compute or not priors for alpha (ancestors) #
 prior_alpha <- TRUE
@@ -141,6 +142,7 @@ out = mclapply(1:runs, mc.cores = cores, FUN = function(line) {
                                 chains_detect100_bind = chains_detect100_bind, 
                                 n_iter_mcmc = n_iter_mcmc, 
                                 n_sample = n_sample, 
+                                burning = burning,
                                 min.support = min.support,
                                 prior_alpha = prior_alpha,
                                 adding_noise = adding_noise, 

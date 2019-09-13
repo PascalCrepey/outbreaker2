@@ -466,7 +466,7 @@ ComputeParametersChains_chainlength <- function(data, min_support = NULL, real_d
 ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
                                  detect100, chains_detect100_bind, 
                                  n_iter_mcmc, n_sample, min.support,
-                                 prior_alpha,
+                                 prior_alpha, burning,
                                  adding_noise, lambda_noise,
                                  init_poisson_scale, move_poisson_scale,
                                  init_sigma, move_sigma,
@@ -534,7 +534,7 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
                                   data_outbreaker = data_outbreaker,
                                   real_data = chains_detect100_bind,
                                   min.support = min.support,
-                                  burning = n_iter_mcmc*0.01,
+                                  burning = burning,
                                   init_alpha = imported)
   
   return(list(results_mcmc = results_mcmc,
