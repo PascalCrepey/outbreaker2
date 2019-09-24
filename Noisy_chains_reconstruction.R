@@ -57,7 +57,7 @@ dates <- detect100[, t]
 # IDs of hospitals infected or colonized #
 ids <- detect100[, hospID]
 # Number of cases who can move in the network #
-n_cases <- detect100[, colonized]
+n_cases <- detect100[, colonized + infected]
 
 # Preparation of transfer matrix #
 fakeMat <- fakeMat / rowSums(fakeMat)
