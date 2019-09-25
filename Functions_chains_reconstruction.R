@@ -35,13 +35,18 @@ prior_ancestor <- function(x, imported, data_outbreaker, fakeMat){
   else{
     # Identification of potential ancestors #
     line <- which(rownames(data_outbreaker$hosp_matrix) %in% ids[data_outbreaker$can_be_ances[,x]])
-    # Identification of considered establishment #
-    col <- which(rownames(data_outbreaker$hosp_matrix)==ids[x])
-    # Looking for the best ancestor according to transfer probability #
-    max_value <- which(fakeMat[line, col] == max(fakeMat[line, col]))
-    max_value <- sample(max_value,1)
-    # Return best ancestor possible #
-    ancestor <- which(data_outbreaker$can_be_ances[,x]==TRUE)[max_value]
+    if(length(line) > 0){
+      # Identification of considered establishment #
+      col <- which(rownames(data_outbreaker$hosp_matrix)==ids[x])
+      # Looking for the best ancestor according to transfer probability #
+      max_value <- which(fakeMat[line, col] == max(fakeMat[line, col]))
+      max_value <- sample(max_value,1)
+      # Return best possible ancestor #
+      ancestor <- which(data_outbreaker$can_be_ances[,x]==TRUE)[max_value]
+    }
+    else{
+      ancestor <- NA
+    }
   }
   return(ancestor)
 }
