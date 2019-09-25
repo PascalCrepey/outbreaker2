@@ -18,12 +18,12 @@ source("./Functions_chains_reconstruction.R")
 ###########################
 #### Global parameters ####
 ###########################
-cores = 16
+cores = 2
 runs = 100
 
-n_iter_mcmc <- 100000
-n_sample <- n_iter_mcmc*0.0001
-burning <- n_iter_mcmc*0.01
+n_iter_mcmc <- 1000
+n_sample <- 10 # n_iter_mcmc*0.0001
+burning <- 100 # n_iter_mcmc*0.01
 
 # Compute or not priors for alpha (ancestors) #
 prior_alpha <- TRUE
