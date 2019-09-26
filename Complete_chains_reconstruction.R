@@ -17,14 +17,9 @@ source("./Functions_chains_reconstruction.R")
 ###########################
 #### Global parameters ####
 ###########################
-# # Allowed difference between time of infection found in bayesian output and time of detection #
-# allowed.diff <- c(0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.75, 1.0)
-# Minimum support #
-# min.support <- c(0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
-# Number of MCMC iterations #
-# n_iter_mcmc <- c(1000,2500,5000,10000,20000,30000,50000)
 n_iter_mcmc <- 250000
 n_sample <- n_iter_mcmc*0.0001
+burning <- n_iter_mcmc*0.01
 
 # Compute or not priors for alpha (ancestors) #
 prior_alpha <- TRUE
@@ -192,7 +187,7 @@ parameters <- ComputeParameters(results_bayesian = results_mcmc,
                                 data_outbreaker = data_outbreaker,
                                 real_data = chains_detect100_bind,
                                 min.support = min.support,
-                                burning = n_iter_mcmc*0.01,
+                                burning = burning,
                                 init_alpha = imported)
 
 save(results_mcmc, parameters,

@@ -21,9 +21,9 @@ source("./Functions_chains_reconstruction.R")
 cores = 10
 runs = 100
 
-n_iter_mcmc <- 100
-n_sample <- 5 # n_iter_mcmc*0.0001
-burning <- 10 # n_iter_mcmc*0.01
+n_iter_mcmc <- 50000
+n_sample <- n_iter_mcmc*0.0001
+burning <- n_iter_mcmc*0.01
 
 # Compute or not priors for alpha (ancestors) #
 prior_alpha <- TRUE
