@@ -17,55 +17,33 @@ source("./Functions_chains_reconstruction.R")
 ###########################
 #### Global parameters ####
 ###########################
-# # Allowed difference between time of infection found in bayesian output and time of detection #
-# allowed.diff <- c(0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.75, 1.0)
-# Minimum support #
-# min.support <- c(0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
-# Number of MCMC iterations #
-# n_iter_mcmc <- c(1000,2500,5000,10000,20000,30000,50000)
-n_iter_mcmc <- 500000
-n_sample <- 50
+n_iter_mcmc <- 250000
+n_sample <- n_iter_mcmc*0.0001
+burning <- n_iter_mcmc*0.01
 
 # Compute or not priors for alpha (ancestors) #
 prior_alpha <- TRUE
 
 # Minimal support #
-min.support <- 10^(-seq(0, 8, by = 0.05))
+min.support <- 10^(-seq(0, 4, by = 0.05))
 
 # Initialization of poisson scale #
 init_poisson_scale <- 1
 
-#############################
-#### Preparation of data ####
-#############################
+# Adding noise on dates of infection #
+adding_noise <- TRUE
+lambda_noise <- 3.5
+
 detect100 <- data$detect100
 chains_detect100 <- chains$detect100
 
-# Preparation of transfer matrix #
-fakeMat <- fakeMat / rowSums(fakeMat)
-# To take into account hospitals doing 0 transfer but admitting transferred
-# patients
-fakeMat[is.nan(fakeMat)] <- 0 
-
-########################################################
-#### Estimating the distribution of generation time ####
-########################################################
-## Using the chains results ##
-chains_detect100 <- lapply(chains_detect100, generation_time)
-# chains_detect100 <- lapply(chains_detect100, get_origin)
-
+#######################################################
+#### Preparation of real transmission chains' data ####
+#######################################################
 chains_detect100_bind <- rbindlist(chains_detect100)
 setnames(chains_detect100_bind, 
          c("hospID","origin"),
          c("to","from"))
-
-hist(chains_detect100_bind$w)
-
-dist.w <- fitdist(chains_detect100_bind[!is.na(w),w],"nbinom")
-
-w <- dnbinom(1:50, 
-             size = dist.w$estimate[1],
-             mu = dist.w$estimate[2])
 
 # Keeping in mind the chains #
 counter <- 0
@@ -82,94 +60,151 @@ chains_detect100_bind <- merge(chains_detect100_bind,
                                                   length_chain = N-1)],
                                by = "chain")
 
+## Preparation of chains_detect100_bind to facilitate the computation of parameters ##
+detect100[,num := seq_len(.N)]
 
-################################
-#### "Undetecting" episodes ####
-################################
-chains_detect100_bind[, no_line := .I]
+chains_detect100_bind.2 <- merge(chains_detect100_bind,
+                                 detect100[,.(hospID, t_descendant = t,
+                                              t_detect_descendant = t_detect, 
+                                              num)],
+                                 by.x = c("to", "t_detect"),
+                                 by.y = c("hospID","t_detect_descendant"))
+chains_detect100_bind.2 <- merge(chains_detect100_bind.2,
+                                 detect100[,.(hospID, 
+                                              t_ancestor = t, 
+                                              num)],
+                                 by.x = c("from"),
+                                 by.y = c("hospID"),
+                                 all.x=TRUE)
+chains_detect100_bind.2 <- chains_detect100_bind.2[t_ancestor<t | is.na(from)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[order(to, t, t_ancestor)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[,.SD[.N],
+                                                   by = c("from", "to", "t")]
+# chains_detect100_bind.2[, t.y := NULL]
+setnames(chains_detect100_bind.2, c("num.x","num.y"), c("ids_to","ids_from"))
 
-data_undetected <- merge(chains_detect100_bind[, .(chain, ancestor = from, 
-                                                   t, t_detect, hospID = to,
-                                                   no_line_hospID = no_line)],
-                         chains_detect100_bind[, .(chain, hospID = from, t_descendant = t,
-                                                   t_detect_descendant = t_detect,
-                                                   descendant = to,
-                                                   no_line_descendant = no_line)],
-                         by.x = c("chain", "hospID"),
-                         by.y = c("chain", "hospID"),
-                         all.x = TRUE)
-data_undetected <- data_undetected[t_descendant > t &
-                                     !is.na(ancestor) & 
-                                     descendant != ancestor,
-                                   .SD[.N],
-                                   by=c("chain","hospID","descendant","ancestor")]
-to_undetect <- data_undetected[,unique(no_line_hospID)]
+chains_detect100_bind <- chains_detect100_bind.2
 
-detect100[, no_line := seq_len(.N)]
-tmp <- merge(detect100,
-             chains_detect100_bind[no_line %in% to_undetect,
-                                   .(chain, to, t, t_detect, colonized, infected, detected, from, t_lag, w, length_chain)],
-             by.x = c("hospID", "t", "t_detect"),
-             by.y = c("to", "t", "t_detect"))
+#################################################
+#### Estimating generation time distribution ####
+#################################################
+chains_detect100_bind[, generation_time := t - t_ancestor]
 
-detect100.modified <- detect100[!no_line %in% tmp[,no_line]]
-detect100.modified[, no_line := NULL]
+hist(chains_detect100_bind$generation_time)
 
-detect100.modified[, no_line := seq_len(.N)]
+generation_time.dist <- as.data.table(prop.table(table(chains_detect100_bind$generation_time)))
+setnames(generation_time.dist, 
+         c("V1", "N"),
+         c("generation_time", "p"))
 
+w <- generation_time.dist[, p]
+
+
+################################################
+#### Identification of episodes to undetect ####
+################################################
+## Identifying the depth of each episode in its propagation chain ##
+setkey(chains_detect100_bind,chain,t)
+
+chains_detect100_bind[is.na(from),
+                      depth := 0]
+index <- 1
+
+while(chains_detect100_bind[is.na(depth), .N] > 0){
+  chains_detect100_bind<-merge(chains_detect100_bind,
+                               chains_detect100_bind[, .(chain, ids_to, 
+                                                         depth_ancestor = depth)],
+                               by.x = c("chain", "ids_from"),
+                               by.y = c("chain", "ids_to"),
+                               all.x = TRUE)
+  chains_detect100_bind[depth_ancestor == index - 1,
+                        depth := depth_ancestor + 1]
+  chains_detect100_bind[, depth_ancestor := NULL]
+  index <- index + 1
+}
+
+## Identifying the list of ancestors and descendants ##
+list_ancestors <- chains_detect100_bind[!is.na(from), unique(ids_from)]
+list_descendants <- chains_detect100_bind[!is.na(from), unique(ids_to)]
+
+list_both <- list_ancestors[which(list_ancestors %in% list_descendants)]
+
+## Deletion of lines to undetect ##
+# Identification in chains_detect100_bind #
+deleted_ids <- chains_detect100_bind[depth %% 2 == 1 &
+                                       ids_to %in% list_both, 
+                                     ids_to]
+
+# Deletion in detect100 #
+detect100 <- detect100[!num %in% deleted_ids]
+
+# Isolation in chains_detect100_bind #
+delete_descendant <- chains_detect100_bind[ids_to %in% deleted_ids]
+delete_ancestor <- chains_detect100_bind[ids_from %in% deleted_ids]
+# Deletion in chains_detect100_bind #
+chains_detect100_bind <- chains_detect100_bind[!(ids_to %in% deleted_ids |
+                                                 ids_from %in% deleted_ids)]
+
+## Preparation of new links to add ##
+new_chains_to_add <- merge(delete_ancestor[, .(chain, ids_from, ids_to, to, t, t_detect,
+                                               infected, detected, colonized, length_chain,
+                                               t_descendant, generation_time, depth)],
+                           delete_descendant[, .(chain, ids_to, ids_from, from)],
+                           by.x = c("chain", "ids_from"),
+                           by.y = c("chain", "ids_to"))
+new_chains_to_add[,ids_from := NULL]
+setnames(new_chains_to_add, "ids_from.y", "ids_from")
+
+## Merging the two databases ##
+chains_detect100_bind <- rbind(chains_detect100_bind,
+                               new_chains_to_add, 
+                               fill = TRUE)
+
+## Compute new ids ##
+detect100[, new_ids := seq_len(.N)]
+
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               detect100[, .(num, new_ids_from = new_ids)],
+                               by.x = "ids_from",
+                               by.y = "num",
+                               all.x = TRUE)
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               detect100[, .(num, new_ids_to = new_ids)],
+                               by.x = "ids_to",
+                               by.y = "num",
+                               all.x = TRUE)
+chains_detect100_bind[, c("ids_to", "ids_from") := NULL]
+setnames(chains_detect100_bind, 
+         c("new_ids_from", "new_ids_to"),
+         c("ids_from", "ids_to"))
+
+#############################
+#### Preparation of data ####
+#############################
+## Use of data with 100% of detection ##
 # Dates of detection #
-dates <- detect100.modified[, t_detect]
+dates <- detect100[, t]
 # IDs of hospitals infected or colonized #
-ids <- detect100.modified[, hospID]
+ids <- detect100[, hospID]
 # Number of cases who can move in the network #
-n_cases <- detect100.modified[, colonized]
+n_cases <- detect100[, colonized + infected]
 
-##############################################################
-# ## Use of data with 100% of detection ##
-# setkey(chains_detect100_bind, chain, t)
-# 
-# chains_detect100_bind[, no_line := .I]
-# # First and last line of a chain #
-# list_first_last <- chains_detect100_bind[,
-#                                          .SD[c(1,.N)],
-#                                          by = "chain"][, unique(no_line)] 
-# chains_detect100_bind[, I_first_last := (no_line %in% list_first_last)]
-# 
-# # Lines to "undetect" #
-# chains_detect100_bind[, to_lag := c(NA, 
-#                                       chains_detect100_bind[1:(.N-1),to])]
-# chains_detect100_bind[, I_to_undetect := FALSE]
-# chains_detect100_bind[to_lag == from &
-#                         length_chain > 1 &
-#                         I_first_last == FALSE, 
-#                       I_to_undetect := TRUE]
-# chains_detect100_bind[, no_line := NULL]
-# 
-# detect100[, no_line := seq_len(.N)]
-# tmp <- merge(detect100,
-#              chains_detect100_bind[I_to_undetect == TRUE,
-#                                    .(chain, to, t, t_detect, colonized, infected, detected, from, t_lag, w, length_chain)],
-#              by.x = c("hospID", "t", "t_detect"),
-#              by.y = c("to", "t", "t_detect"))
-# 
-# detect100.modified <- detect100[!no_line %in% tmp[,no_line]]
-# detect100.modified[, no_line := NULL]
-# 
-# detect100.modified[, no_line := seq_len(.N)]
-# 
-# # Dates of detection #
-# dates <- detect100.modified[, t_detect]
-# # IDs of hospitals infected or colonized #
-# ids <- detect100.modified[, hospID]
-# # Number of cases who can move in the network #
-# n_cases <- detect100.modified[, colonized]
-#########################################################################
-
-
+# Preparation of transfer matrix #
+fakeMat <- fakeMat / rowSums(fakeMat)
+# To take into account hospitals doing 0 transfer but admitting transferred
+# patients
+fakeMat[is.nan(fakeMat)] <- 0 
 
 ################################
 #### Chains' reconstruction ####
 ################################
+## Adding noise on dates if needed ##
+if(adding_noise){
+  dates <- round(dates + rpois(length(dates), 
+                               lambda = lambda_noise), 0)
+  dates[which(dates < 0)] <- 0
+}
+
 # Data #
 data_outbreaker <- outbreaker_data(dates = dates,
                                    w_dens = w,
@@ -178,14 +213,15 @@ data_outbreaker <- outbreaker_data(dates = dates,
                                    ids = ids)
 
 ## Identification of imported cases ##
-check.importation <- merge(detect100.modified,
-                           chains_detect100_bind[,-12],
+check.importation <- merge(detect100[, n_line := seq_len(.N)],
+                           chains_detect100_bind,
                            by.x = c("hospID", "t_detect"),
                            by.y = c("to", "t_detect"))
-detect100.modified[check.importation[is.na(from) & imported == 0, no_line], 
+detect100[check.importation[is.na(from) & imported == 0, n_line], 
           imported := 1]
-imported <- ifelse(detect100.modified[, imported] == 1 | 
-                     detect100.modified[, t_detect] == 1, NA_integer_, 1)
+detect100[, n_line := NULL]
+imported <- ifelse(detect100[, imported] == 1 | 
+                     detect100[, t_detect] == 1, NA_integer_, 1)
 
 if(prior_alpha == T){
   ## Computing priors for alpha ##
@@ -197,10 +233,10 @@ if(prior_alpha == T){
 }
 
 # Config parameters #
-config <- create_config(init_potential_colonised = rep(2, data_outbreaker$N),
-                        sd_potential_colonised = 5,
-                        prior_poisson_scale = c(5, 2),
-                        move_poisson_scale = FALSE,
+config <- create_config(prior_poisson_scale = c(1, 1),
+                        move_poisson_scale = TRUE,
+                        init_potential_colonised = n_cases*init_poisson_scale,
+                        # sd_potential_colonised = 5,
                         pb = TRUE,
                         find_import = FALSE,
                         outlier_threshold = 5,
@@ -208,7 +244,11 @@ config <- create_config(init_potential_colonised = rep(2, data_outbreaker$N),
                         init_tree = imported,
                         n_iter = n_iter_mcmc, 
                         sample_every = n_sample,
-                        init_poisson_scale = init_poisson_scale)
+                        init_poisson_scale = init_poisson_scale,
+                        move_sigma = TRUE,
+                        init_sigma = 0.9,
+                        move_pi = TRUE,
+                        init_pi = 1)
 
 # Reconstruction of chains #
 results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker, 
@@ -216,43 +256,6 @@ results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker,
                                 ids = ids, 
                                 config = config)
 
-## Preparation of chains_detect100_bind to facilitate the computation of parameters ##
-# chains_tomerge <- chains_detect100_bind[!no_line %in% 
-#                                           data_undetected[,
-#                                                           c(no_line_hospID,no_line_descendant)],
-#                                         -c(9,10,11,12)]
-# chains_tomerge <- rbind(chains_tomerge,
-#                         data_undetected[, .(from = ancestor,
-#                                             to = descendant,
-#                                             chain, 
-#                                             t = t_descendant,
-#                                             t_detect = t_detect_descendant,
-#                                             detected = 2)],
-#                         fill = TRUE)
-# setkey(chains_tomerge, chain, t)
-# 
-chains.undetected <- merge(data_undetected,
-                           detect100.modified[,.(hospID, t_detect, no_line)],
-                           by.x = c("descendant", "t_detect_descendant"),
-                           by.y = c("hospID","t_detect"))
-chains.undetected <- merge(chains.undetected,
-                           detect100.modified[,.(hospID, t_ancestor = t, no_line)],
-                           by.x = c("ancestor"),
-                           by.y = c("hospID"))
-chains.undetected <- chains.undetected[t_ancestor<t_descendant]
-chains.undetected <- chains.undetected[order(descendant, t_descendant, t_ancestor)]
-chains.undetected <- chains.undetected[,.SD[.N],
-                                       by = c("ancestor", "descendant", "t_descendant")]
-chains.undetected[, t_ancestor := NULL]
-setnames(chains.undetected, c("no_line.x","no_line.y"), c("ids_descendant","ids_ancestor"))
-
-comparison <- merge(results_mcmc$res_aa,
-                    chains.undetected[,.(ids_ancestor, ids_descendant, 
-                                         ancestor, descendant, t_descendant, chain)],
-                    by.x = "to",
-                    by.y = "ids_descendant")
-
-comparison[ids_ancestor == from, .N]
 
 ##################################
 #### Estimation of parameters ####
@@ -261,30 +264,34 @@ parameters <- ComputeParameters(results_bayesian = results_mcmc,
                                 data_outbreaker = data_outbreaker,
                                 real_data = chains_detect100_bind,
                                 min.support = min.support,
-                                burning = 100,
+                                burning = burning,
                                 init_alpha = imported)
 
-## Shannon entropy ##
-results_bayesian_burning <- CreateOutputBayesian(results_mcmc$res, ids, 
-                                                 burning = 100, 
-                                                 init_alpha = imported)
-
-summary(results_bayesian_burning$aa[to %in% chains_detect100_bind[,ids_to],
-                                    .(result=-sum(support*log(support))), by="to"])
-
-# save(results_mcmc, parameters, 
-#      file = paste0("./tmp_results/20190809/results_mcmc_",n_iter_mcmc,"_",n_sample,"_prioralpha_poisson_scale1.RData"))
+save(results_mcmc, parameters,
+     file = paste0("./tmp_results/20190902/1-results_mcmc_",n_iter_mcmc,"_",n_sample,"_prioralpha_1.RData"))
 
 ############################
 #### Plot of ROC curves ####
 ############################
 PlotROC(se = parameters$parameters_links_aa$se_links.aa,
         sp = parameters$parameters_links_aa$sp_links.aa,
+        min.support = min.support,
         type.plot = "ggplot")
 
-PlotChains(parameters_chains = parameters$parameters_chains_aa,
-           minimal_support = parameters$minimal_support,
-           type.plot = "ggplot")
+Plot_se_ppv(se = parameters$parameters_links_aa$se_links.aa,
+            ppv = parameters$parameters_links_aa$ppv_links.aa,
+            type.plot = "ggplot")
+
+
+
+
+
+
+
+
+
+
+
 
 
 
