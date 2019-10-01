@@ -31,7 +31,7 @@ min.support <- 10^(-seq(0, 4, by = 0.05))
 init_poisson_scale <- 1
 
 # Adding noise on dates of infection #
-adding_noise <- TRUE
+adding_noise <- FALSE
 lambda_noise <- 3.5
 
 detect100 <- data$detect100
@@ -268,7 +268,7 @@ parameters <- ComputeParameters(results_bayesian = results_mcmc,
                                 init_alpha = imported)
 
 save(results_mcmc, parameters,
-     file = paste0("./tmp_results/20190902/1-results_mcmc_",n_iter_mcmc,"_",n_sample,"_prioralpha_1.RData"))
+     file = paste0("./tmp_results/20190902/1-results_mcmc_incomplete_",n_iter_mcmc,"_",n_sample,"_prioralpha_1.RData"))
 
 ############################
 #### Plot of ROC curves ####
