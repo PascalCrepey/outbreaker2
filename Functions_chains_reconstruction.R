@@ -546,6 +546,61 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
               parameters = parameters))
 }
 
+###########################################################
+#### Function to reconstruct chains based on real data ####
+###########################################################
+RealChainsReconstruction <- function(dates, w, n_cases, transfers, ids,
+                                     imported,
+                                     n_iter_mcmc, n_sample,
+                                     prior_alpha, burning,
+                                     init_poisson_scale, move_poisson_scale,
+                                     init_sigma, move_sigma,
+                                     init_pi, move_pi){
+  # Data #
+  data_outbreaker <- outbreaker_data(dates = dates,
+                                     w_dens = w,
+                                     n_cases = n_cases,
+                                     hosp_matrix = transfers,
+                                     ids = ids)
+  
+  imported <- ifelse(imported == 1, NA_integer_, 1)
+  
+  if(prior_alpha == T){
+    ## Computing priors for alpha ##
+    imported <- sapply(seq_len(length(imported)), 
+                       FUN = prior_ancestor,
+                       imported = imported,
+                       data_outbreaker = data_outbreaker,
+                       fakeMat = transfers)
+  }
+  
+  # Config parameters #
+  config <- create_config(prior_poisson_scale = c(1, 1),
+                          move_poisson_scale = move_poisson_scale,
+                          init_potential_colonised = n_cases*init_poisson_scale,
+                          # sd_potential_colonised = 5,
+                          pb = TRUE,
+                          find_import = FALSE,
+                          outlier_threshold = 5,
+                          data = data_outbreaker,
+                          init_tree = imported,
+                          n_iter = n_iter_mcmc, 
+                          sample_every = n_sample,
+                          init_poisson_scale = init_poisson_scale,
+                          move_sigma = move_sigma,
+                          init_sigma = init_sigma,
+                          move_pi = move_pi,
+                          init_pi = init_pi)
+  
+  # Reconstruction of chains #
+  results_mcmc <- ComputeBayesian(outbreaker_data = data_outbreaker, 
+                                  n_iter_mcmc = n_iter_mcmc,
+                                  ids = ids, 
+                                  config = config)
+  
+  return(results_mcmc = results_mcmc)
+}
+
 ###########################################
 #### Functions to represent parameters ####
 ###########################################
@@ -617,6 +672,32 @@ PlotChains <- function(parameters_chains, minimal_support, type.plot){
     ggplotly(FigPlot)
   }
 } 
+
+############################################################
+#### Function to plot network of chains' reconstruction ####
+############################################################
+plot_network <- function(results, min_support){
+  # Preparation of edges #
+  edges <- results[kappa == 1 & support >= min_support, 
+                   .(from, to, 
+                     value = support,
+                     arrows = "to")]
+  case_cols <- cases_pal(edges[,.N])
+  edges$color <- case_cols[edges$from]
+  
+  # Preparation of nodes #
+  nodes <- results[kappa == 1 & support >= min_support,
+                   .(id = to,
+                     label = to_label)]
+  nodes$size <- 1
+  nodes$color <- case_cols
+  nodes$shape <- "dot"
+  
+  # Generate graph #
+  out <- visNetwork::visNetwork(nodes = nodes, edges = edges)
+  
+  return(out)
+}
 
 
 
