@@ -130,6 +130,7 @@ outbreaker_data <- function(..., data = list(...)) {
       length_to_add <- (data$max_range-length(data$w_dens)) + 10 # +10 to be on the safe side
       val_to_add <- stats::dexp(seq_len(length_to_add), 1)
       val_to_add <- 1e-4*(val_to_add/sum(val_to_add))
+      val_to_add[val_to_add == 0] <- min(val_to_add[val_to_add != 0]) # In case there is a huge data range
       data$w_dens <- c(data$w_dens, val_to_add)
     }
 
