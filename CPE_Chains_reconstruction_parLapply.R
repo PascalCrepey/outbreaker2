@@ -76,7 +76,7 @@ clusterEvalQ(cl, source("./Functions_chains_reconstruction.R"))
 ################################
 #### Chains' reconstruction ####
 ################################
-out <- parLapply(cl, seq(0.075,0.5,0.025), function(i) {
+out <- parLapply(cl, 4/seq(6,60,2), function(i) {
   output <- RealChainsReconstruction(dates = dates, 
                                      w = dgamma(1:50, shape = 4, rate = i), 
                                      n_cases = n_cases, 
