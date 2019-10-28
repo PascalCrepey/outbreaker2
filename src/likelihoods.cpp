@@ -356,7 +356,7 @@ double cpp_ll_reporting(Rcpp::List data, Rcpp::List param, SEXP i,
   }
 
   if (custom_function == R_NilValue) {
-
+    
     double out = 0.0;
 
     // all cases are retained
@@ -520,6 +520,7 @@ double cpp_ll_contact(Rcpp::List data, Rcpp::List param, size_t i,
 // for a given number of observed cases under the assumption of a Poisson distribution
 // with mean scale_poisson
 
+
 // double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, SEXP i,
 // 				  Rcpp::RObject custom_function) {
 // 
@@ -588,6 +589,7 @@ double cpp_ll_contact(Rcpp::List data, Rcpp::List param, size_t i,
 // }
 
 
+
 // ---------------------------
 
 // This likelihood corresponds to the sums of the separate timing likelihoods,
@@ -645,7 +647,6 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
   if (hosp_matrix.ncol() < 1) return 0.0;
   
   if (custom_function == R_NilValue) {
-    
     double out = 0;
     double q_alpha_b = 0;
     double q_lb = 0;
