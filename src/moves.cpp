@@ -34,6 +34,12 @@ Rcpp::List cpp_move_poisson_scale(Rcpp::List param, Rcpp::List data, Rcpp::List 
   Rcpp::List new_param = clone(param);
   Rcpp::NumericVector poisson_scale = param["poisson_scale"];
   Rcpp::NumericVector new_poisson_scale = new_param["poisson_scale"];
+  Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
+  Rcpp::IntegerVector new_potential_colonised = new_param["potential_colonised"];
+  Rcpp::IntegerVector alpha = param["alpha"];
+  Rcpp::IntegerVector n_cases = data["n_cases"];
+  
+  size_t N = static_cast<size_t>(data["N"]);
   
   double sd_poisson_scale = static_cast<double>(config["sd_poisson_scale"]);
   
@@ -43,28 +49,27 @@ Rcpp::List cpp_move_poisson_scale(Rcpp::List param, Rcpp::List data, Rcpp::List 
   
   new_poisson_scale[0] += R::rnorm(0.0, sd_poisson_scale); // new proposed value
   
+  for (size_t i = 0; i < N; i++) {
+      new_potential_colonised[i] = std::round((new_poisson_scale[0]*n_cases[i]));
+  }
   
   // automatic rejection of negative poisson_scale
-  
   if (new_poisson_scale[0] < 0.0) {
     return param;
   }
   
   // compute likelihoods
-  old_logpost = cpp_ll_potential_colonised(data, param, R_NilValue, custom_ll);
-  new_logpost = cpp_ll_potential_colonised(data, new_param, R_NilValue, custom_ll);
-  
+  old_logpost = cpp_ll_patient_transfer(data, param, R_NilValue, custom_ll);
+  new_logpost = cpp_ll_patient_transfer(data, new_param, R_NilValue, custom_ll);
   
   // compute priors
   
   old_logpost += cpp_prior_poisson_scale(param, config, custom_prior);
   new_logpost += cpp_prior_poisson_scale(new_param, config, custom_prior);
   
-  
   // acceptance term
   
   p_accept = exp(new_logpost - old_logpost);
-  
   
   // acceptance: the new value is already in mu, so we only act if the move is
   // rejected, in which case we restore the previous ('old') value
@@ -237,7 +242,7 @@ Rcpp::List cpp_move_sigma(Rcpp::List param, Rcpp::List data, Rcpp::List config,
     
     // automatic rejection of sigma outside [0;1]
     
-    if (new_sigma[0] < 0.0 || new_sigma[0] > 1.0) {
+    if (new_sigma[0] < 0.0 || new_sigma[0] >= 1.0) {
         return param;
     }
     
@@ -715,63 +720,3 @@ Rcpp::List cpp_move_kappa(Rcpp::List param, Rcpp::List data, Rcpp::List config,
 
 
 
-// ---------------------------
-
-// Movement of potential_colonised is drawn from a rounded normal with sd
-// sd_potential_colonised.
-
-// [[Rcpp::export(rng = true)]]
-Rcpp::List cpp_move_potential_colonised(Rcpp::List param, Rcpp::List data, Rcpp::List config,
-					Rcpp::RObject list_custom_ll = R_NilValue) {
-
-  Rcpp::List new_param = clone(param);
-  Rcpp::IntegerVector alpha = param["alpha"];
-  Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
-  Rcpp::IntegerVector new_potential_colonised = new_param["potential_colonised"];
-
-  size_t N = static_cast<size_t>(data["N"]);
-
-  double sd_potential_colonised = static_cast<double>(config["sd_potential_colonised"]);
-  
-  double old_loglike = 0.0, new_loglike = 0.0, p_accept = 0.0;
-
-  for (size_t i = 0; i < N; i++) {
-
-    if (alpha[i] != NA_INTEGER) {
-    
-      // proposal (+/- 1)
-      new_potential_colonised[i] += static_cast<int>(R::rnorm(0.0, sd_potential_colonised));
-
-      if (new_potential_colonised[i] < 0) {
-      
-	new_potential_colonised[i] = potential_colonised[i];
-      
-      } else {
-    
-	// loglike with current value
-	old_loglike = cpp_ll_hosp_joint(data, param, i+1, list_custom_ll);
-
-
-	// loglike with new value
-	new_loglike = cpp_ll_hosp_joint(data, new_param, i+1, list_custom_ll);
-
-	// acceptance term
-	// p_accept = exp(new_loglike - old_loglike);
-	p_accept = exp(new_loglike - old_loglike);
-
-
-	// acceptance: the new value is already in potential_colonised, so we
-	// only act if the move is rejected, in which case we restore the
-	// previous ('old') value
-
-	if (p_accept < unif_rand()) { // reject new values
-	  new_potential_colonised[i] = potential_colonised[i];
-	}
-      
-      }
-    }
-  }
-
-  return new_param;
-
-}

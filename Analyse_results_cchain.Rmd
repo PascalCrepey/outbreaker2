@@ -1,0 +1,184 @@
+---
+title: "Analysis of Bayesian results - Genouest"
+author: "Jonathan Roux"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=TRUE, warning=FALSE, include=FALSE}
+##############################
+#### Loading of libraries ####
+##############################
+library(data.table)
+library(knitr)
+library(ggplot2)
+library(ggrepel)
+
+source("./Functions_Rmd.R")
+
+##########################################
+#### Loading of chains_detect100_bind ####
+##########################################
+load("../StageCRENet/hackathon/outbreaker/data/data1.Rdata")
+load("../StageCRENet/hackathon/outbreaker/chains/chains1.Rdata")
+
+## Preparation of data ##
+detect100 <- data$detect100
+chains_detect100 <- chains$detect100
+
+chains_detect100_bind <- rbindlist(chains_detect100)
+setnames(chains_detect100_bind, 
+         c("hospID","origin"),
+         c("to","from"))
+
+# Keeping in mind the chains #
+counter <- 0
+for(i in 1:chains_detect100_bind[,.N]){
+  if(chains_detect100_bind[i, is.na(from)])
+    counter <- counter + 1
+  chains_detect100_bind[i, chain := counter]
+}
+
+# Length of chains #
+lengths_chains <- chains_detect100_bind[, .N, by = "chain"]
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               lengths_chains[, .(chain,
+                                                  length_chain = N-1)],
+                               by = "chain")
+
+## Preparation of chains_detect100_bind to facilitate the computation of parameters ##
+detect100[,num := seq_len(.N)]
+
+chains_detect100_bind.2 <- merge(chains_detect100_bind,
+                                 detect100[,.(hospID, t_descendant = t,
+                                              t_detect_descendant = t_detect, 
+                                              num)],
+                                 by.x = c("to", "t_detect"),
+                                 by.y = c("hospID","t_detect_descendant"))
+chains_detect100_bind.2 <- merge(chains_detect100_bind.2,
+                                 detect100[,.(hospID, 
+                                              t_ancestor = t, 
+                                              num)],
+                                 by.x = c("from"),
+                                 by.y = c("hospID"),
+                                 all.x=TRUE)
+chains_detect100_bind.2 <- chains_detect100_bind.2[t_ancestor<t | is.na(from)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[order(to, t, t_ancestor)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[,.SD[.N],
+                                                   by = c("from", "to", "t")]
+# chains_detect100_bind.2[, t.y := NULL]
+setnames(chains_detect100_bind.2, c("num.x","num.y"), c("ids_to","ids_from"))
+
+detect100[, num := NULL]
+
+chains_detect100_bind <- chains_detect100_bind.2
+
+
+###################################################
+#### Loading of data of chains' reconstruction ####
+###################################################
+# Number of scenarii #
+no_scenarii <- 3
+
+# Location of rds files #
+# Genouest or Ordi #
+location <- "Genouest"
+
+# Type: complete or incomplete #
+type <- "complete"
+
+# Loading of data #
+# results_1 <- readRDS("./tmp_results/Ordi/1-results_50000_5_parLapply_scenario1.rds")
+# results_2 <- readRDS("./tmp_results/Genouest/1-results_50000_5_parLapply_scenario2.rds")
+# results_3 <- readRDS("./tmp_results/Ordi/1-results_50000_5_parLapply_scenario3.rds")
+
+##########################
+#### Global variables ####
+##########################
+# Burning period #
+vec_burning <- rep(5000, no_scenarii)
+# Thinning #
+thinning <- rep(5, no_scenarii)
+# No iterations #
+no_iter <- rep(50000, no_scenarii)
+# Adding noise on dates of infection #
+adding_noise <- c("-", "P(3.5)", "P(7)")
+# Minimal support #
+min.support <- 10^(-seq(0, 4, by = 0.05))
+
+###################################
+#### Computation of parameters ####
+###################################
+result_function <- lapply(1:no_scenarii, 
+                          ParametersSynthesis, 
+                          vec_burning = vec_burning,
+                          location = location,
+                          type = type,
+                          NotRetrieved = FALSE,
+                          StudyKappa = FALSE,
+                          chains_detect100_bind = chains_detect100_bind,
+                          NewBurning = TRUE,
+                          min.support = min.support)
+
+output <- t(cbind(no_iter = no_iter,
+                  thinning = thinning,
+                  burning = vec_burning,
+                  adding_noise = adding_noise,
+                  rbindlist(lapply(result_function,
+                                   function(r) {
+                                     r$parameters
+                                     }
+                                   )
+                            )
+                  )
+            )
+
+output.dt <- as.data.table(output)
+names(output.dt) <- as.character(paste0("Scenario ",1:no_scenarii))
+
+
+output.dt[, parameter := c("No. of iterations", "Thinning", "Burning period",
+                           "Noise added", 
+                           "Value of pi", "Value of sigma",
+                           "Value of poisson_scale", "Shannon entropy",
+                           "Consensus-No links retrieved",
+                           "Consensus-Sensitivity", "Consensus-% chains reconstructed",
+                           "All ancestors-Sensitivity", "All ancestors-Specificity",
+                           "All ancestors-No links retrieved", "All ancestors-PPV", 
+                           "All ancestors-NPV", "All ancestors-% chains reconstructed",
+                           "All ancestors-Maximum sensitivity",
+                           "All ancestors-Related minimal support",
+                           "All ancestors-Related no links retrieved",
+                           "All ancestors-Related specificity",
+                           "All ancestors-Related PPV", 
+                           "All ancestors-Related NPV", 
+                           "All ancestors-Related % chains reconstructed",
+                           "Youden max",
+                           "Youden max-Related minimal support",
+                           "Youden max-Related sensitivity",
+                           "Youden max-Related specificity",
+                           "Youden max-Related no links retrieved",
+                           "Youden max-Related PPV", 
+                           "Youden max-Related NPV", 
+                           "Youden max-Related % chains reconstructed"
+                           )]
+
+setcolorder(output.dt, "parameter")
+```
+
+```{r echo=FALSE,warning=FALSE,results="asis", message=FALSE}
+kable(output.dt)
+
+lapply(result_function,
+       function(r) {
+         r$ROC
+         }
+       )
+```

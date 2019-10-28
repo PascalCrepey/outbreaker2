@@ -1,0 +1,326 @@
+---
+title: "Analysis of Bayesian results ichain - Genouest"
+author: "Jonathan Roux"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=TRUE, warning=FALSE, include=FALSE}
+##############################
+#### Loading of libraries ####
+##############################
+library(data.table)
+library(knitr)
+library(ggplot2)
+library(ggrepel)
+
+source("./Functions_Rmd.R")
+
+##########################################
+#### Loading of chains_detect100_bind ####
+##########################################
+load("../StageCRENet/hackathon/outbreaker/data/data1.Rdata")
+load("../StageCRENet/hackathon/outbreaker/chains/chains1.Rdata")
+
+## Preparation of data ##
+detect100 <- data$detect100
+chains_detect100 <- chains$detect100
+
+chains_detect100_bind <- rbindlist(chains_detect100)
+setnames(chains_detect100_bind, 
+         c("hospID","origin"),
+         c("to","from"))
+
+# Keeping in mind the chains #
+counter <- 0
+for(i in 1:chains_detect100_bind[,.N]){
+  if(chains_detect100_bind[i, is.na(from)])
+    counter <- counter + 1
+  chains_detect100_bind[i, chain := counter]
+}
+
+# Length of chains #
+lengths_chains <- chains_detect100_bind[, .N, by = "chain"]
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               lengths_chains[, .(chain,
+                                                  length_chain = N-1)],
+                               by = "chain")
+
+## Preparation of chains_detect100_bind to facilitate the computation of parameters ##
+detect100[,num := seq_len(.N)]
+
+chains_detect100_bind.2 <- merge(chains_detect100_bind,
+                                 detect100[,.(hospID, t_descendant = t,
+                                              t_detect_descendant = t_detect, 
+                                              num)],
+                                 by.x = c("to", "t_detect"),
+                                 by.y = c("hospID","t_detect_descendant"))
+chains_detect100_bind.2 <- merge(chains_detect100_bind.2,
+                                 detect100[,.(hospID, 
+                                              t_ancestor = t, 
+                                              num)],
+                                 by.x = c("from"),
+                                 by.y = c("hospID"),
+                                 all.x=TRUE)
+chains_detect100_bind.2 <- chains_detect100_bind.2[t_ancestor<t | is.na(from)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[order(to, t, t_ancestor)]
+chains_detect100_bind.2 <- chains_detect100_bind.2[,.SD[.N],
+                                                   by = c("from", "to", "t")]
+# chains_detect100_bind.2[, t.y := NULL]
+setnames(chains_detect100_bind.2, c("num.x","num.y"), c("ids_to","ids_from"))
+
+chains_detect100_bind <- chains_detect100_bind.2
+
+## Estimating generation time distribution ##
+chains_detect100_bind[, generation_time := t - t_ancestor]
+
+
+################################################
+#### Identification of episodes to undetect ####
+################################################
+## Identifying the depth of each episode in its propagation chain ##
+setkey(chains_detect100_bind,chain,t)
+
+chains_detect100_bind[is.na(from),
+                      depth := 0]
+index <- 1
+
+while(chains_detect100_bind[is.na(depth), .N] > 0){
+  chains_detect100_bind<-merge(chains_detect100_bind,
+                               chains_detect100_bind[, .(chain, ids_to, 
+                                                         depth_ancestor = depth)],
+                               by.x = c("chain", "ids_from"),
+                               by.y = c("chain", "ids_to"),
+                               all.x = TRUE)
+  chains_detect100_bind[depth_ancestor == index - 1,
+                        depth := depth_ancestor + 1]
+  chains_detect100_bind[, depth_ancestor := NULL]
+  index <- index + 1
+}
+
+## Identifying the list of ancestors and descendants ##
+list_ancestors <- chains_detect100_bind[!is.na(from), unique(ids_from)]
+list_descendants <- chains_detect100_bind[!is.na(from), unique(ids_to)]
+
+list_both <- list_ancestors[which(list_ancestors %in% list_descendants)]
+
+## Deletion of lines to undetect ##
+# Identification in chains_detect100_bind #
+deleted_ids <- chains_detect100_bind[depth %% 2 == 1 &
+                                       ids_to %in% list_both, 
+                                     ids_to]
+
+# Deletion in detect100 #
+detect100 <- detect100[!num %in% deleted_ids]
+
+# Isolation in chains_detect100_bind #
+delete_descendant <- chains_detect100_bind[ids_to %in% deleted_ids]
+delete_ancestor <- chains_detect100_bind[ids_from %in% deleted_ids]
+# Deletion in chains_detect100_bind #
+chains_detect100_bind <- chains_detect100_bind[!(ids_to %in% deleted_ids |
+                                                   ids_from %in% deleted_ids)]
+
+## Preparation of new links to add ##
+new_chains_to_add <- merge(delete_ancestor[, .(chain, ids_from, ids_to, to, t, t_detect,
+                                               infected, detected, colonized, length_chain,
+                                               t_descendant, generation_time, depth)],
+                           delete_descendant[, .(chain, ids_to, ids_from, from)],
+                           by.x = c("chain", "ids_from"),
+                           by.y = c("chain", "ids_to"))
+new_chains_to_add[,ids_from := NULL]
+setnames(new_chains_to_add, "ids_from.y", "ids_from")
+
+## Merging the two databases ##
+chains_detect100_bind <- rbind(chains_detect100_bind[, new := 0],
+                               new_chains_to_add[, new := 1], 
+                               fill = TRUE)
+
+## Compute new ids ##
+detect100[, new_ids := seq_len(.N)]
+
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               detect100[, .(num, new_ids_from = new_ids)],
+                               by.x = "ids_from",
+                               by.y = "num",
+                               all.x = TRUE)
+chains_detect100_bind <- merge(chains_detect100_bind,
+                               detect100[, .(num, new_ids_to = new_ids)],
+                               by.x = "ids_to",
+                               by.y = "num",
+                               all.x = TRUE)
+chains_detect100_bind[, c("ids_to", "ids_from") := NULL]
+setnames(chains_detect100_bind, 
+         c("new_ids_from", "new_ids_to"),
+         c("ids_from", "ids_to"))
+
+
+##########################
+#### Global variables ####
+##########################
+# Number of scenarii #
+no_scenarii <- 3
+
+# Location of rds files: Genouest or Ordi #
+location <- "Genouest"
+
+# Type of chains #
+type <- "incomplete"
+
+# Study links not retrieved by the DLF #
+NotRetrieved <- TRUE
+
+# Study kappa (number of generations) for new links due to incomplete chains #
+StudyKappa <- TRUE
+
+# Burning period #
+vec_burning <- rep(5000, no_scenarii)
+# Thinning #
+thinning <- rep(5, no_scenarii)
+# No iterations #
+no_iter <- rep(50000, no_scenarii)
+# Adding noise on dates of infection #
+adding_noise <- c("-", "P(3.5)", "P(7)")
+# Minimal support #
+min.support <- 10^(-seq(0, 4, by = 0.05))
+
+###################################
+#### Computation of parameters ####
+###################################
+result_function <- lapply(1:no_scenarii, 
+                          ParametersSynthesis, 
+                          vec_burning = vec_burning,
+                          location = location,
+                          type = type,
+                          NotRetrieved = NotRetrieved, 
+                          chains_detect100_bind = chains_detect100_bind,
+                          StudyKappa = StudyKappa,
+                          new_chains_added = new_chains_to_add,
+                          NewBurning = TRUE,
+                          min.support = min.support)
+
+############################################
+#### Creating main output of parameters ####
+############################################
+output_parameters <- t(cbind(no_iter = no_iter,
+                             thinning = thinning,
+                             burning = vec_burning,
+                             adding_noise = adding_noise,
+                             rbindlist(lapply(result_function,
+                                              function(r) {
+                                                r$parameters
+                                                }
+                                              )
+                                       )
+                             )
+                       )
+
+output_parameters <- as.data.table(output_parameters)
+names(output_parameters) <- as.character(paste0("Scenario ",1:no_scenarii))
+
+
+output_parameters[, parameter := c("No. of iterations", "Thinning", "Burning period",
+                           "Noise added", 
+                           "Value of pi", "Value of sigma",
+                           "Value of poisson_scale", "Shannon entropy",
+                           "Consensus-No links retrieved",
+                           "Consensus-Sensitivity", "Consensus-% chains reconstructed",
+                           "All ancestors-Sensitivity", "All ancestors-Specificity",
+                           "All ancestors-No links retrieved", "All ancestors-PPV", 
+                           "All ancestors-NPV", "All ancestors-% chains reconstructed",
+                           "All ancestors-Maximum sensitivity",
+                           "All ancestors-Related minimal support",
+                           "All ancestors-Related no links retrieved",
+                           "All ancestors-Related specificity",
+                           "All ancestors-Related PPV", 
+                           "All ancestors-Related NPV", 
+                           "All ancestors-Related % chains reconstructed",
+                           "Youden max",
+                           "Youden max-Related minimal support",
+                           "Youden max-Related sensitivity",
+                           "Youden max-Related specificity",
+                           "Youden max-Related no links retrieved",
+                           "Youden max-Related PPV", 
+                           "Youden max-Related NPV", 
+                           "Youden max-Related % chains reconstructed"
+                           )]
+
+setcolorder(output_parameters, "parameter")
+
+#############################
+#### Not retrieved links ####
+#############################
+if(NotRetrieved){
+  output_NotRetrieved <- rbindlist(lapply(result_function,
+                                          function(r) {
+                                            r$not_retrieved_links
+                                            }
+                                          )
+                                   )
+  output_NotRetrieved <- dcast(output_NotRetrieved,
+                               from_to + new_link ~ paste0("Scenario_", scenario),
+                               value.var = "N")
+  output_NotRetrieved[, Percentage_runs := round(sum(Scenario_1, Scenario_2, Scenario_3,
+                                                     na.rm=TRUE)/
+                                                   (sum(!is.na(Scenario_1), !is.na(Scenario_2),
+                                                        !is.na(Scenario_3))*100),4)*100, 
+                      by = 1:output_NotRetrieved[,.N]]
+  output_NotRetrieved <- output_NotRetrieved[order(Percentage_runs, decreasing = TRUE)]
+}
+
+################################################
+#### Study of kappa (number of generations) ####
+################################################
+if(StudyKappa){
+  output_kappa <- rbindlist(lapply(result_function,
+                                          function(r) {
+                                            r$kappa_new_links
+                                            }
+                                          )
+                                   )
+  output_kappa <- dcast(output_kappa,
+                        from_to + kappa ~ paste0("Scenario_", scenario),
+                        value.var = "N")
+  output_kappa[, Percentage_runs := round(sum(Scenario_1, Scenario_2, Scenario_3,
+                                                     na.rm=TRUE)/
+                                                   (sum(!is.na(Scenario_1), !is.na(Scenario_2),
+                                                        !is.na(Scenario_3))*100),4)*100, 
+                      by = 1:output_kappa[,.N]]
+  output_kappa <- output_kappa[order(from_to, Percentage_runs, decreasing = TRUE)]
+}
+
+```
+
+### Main parameters
+```{r echo=FALSE,warning=FALSE,results="asis", message=FALSE}
+kable(output_parameters)
+```
+
+### ROC curves
+```{r echo=FALSE,warning=FALSE,results="asis", message=FALSE}
+lapply(result_function,
+       function(r) {
+         r$ROC
+         }
+       )
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results="asis"}
+if(NotRetrieved){
+  cat("### Not retrieved")
+  kable(output_NotRetrieved)
+}
+
+if(StudyKappa){
+  cat("### Number of generations kappa for new links")
+  kable(output_kappa)
+}
+```
+

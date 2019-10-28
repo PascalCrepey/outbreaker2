@@ -520,80 +520,74 @@ double cpp_ll_contact(Rcpp::List data, Rcpp::List param, size_t i,
 // for a given number of observed cases under the assumption of a Poisson distribution
 // with mean scale_poisson
 
-double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, SEXP i,
-				  Rcpp::RObject custom_function) {
 
-  size_t N = static_cast<size_t>(data["N"]);
-  if (N < 2) return 0.0;
-  
-  if (custom_function == R_NilValue) {
-    double out = 0.0;
+// double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, SEXP i,
+// 				  Rcpp::RObject custom_function) {
+// 
+//   size_t N = static_cast<size_t>(data["N"]);
+//   if (N < 2) return 0.0;
+// 
+//   if (custom_function == R_NilValue) {
+// 
+//     double out = 0.0;
+// 
+//     Rcpp::IntegerVector alpha = param["alpha"];
+//     Rcpp::IntegerVector n_cases = data["n_cases"];
+//     Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
+//     double poisson_scale = param["poisson_scale"];
+//     double sumFact = 0;
+//     double lambda = 0;
+// 
+//     if (i == R_NilValue) {
+//       for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
+// 	if (alpha[j] != NA_INTEGER) {
+// 	  //out = R::dpois(potential_colonised,scale_poisson*n_cases, log = true) ;
+// 	  //sorry quicker with the log dpois formula :-)
+// 	  lambda = poisson_scale * n_cases[j];
+// 	  sumFact = 0;
+// 
+// 	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
+// 	    sumFact += log(ii) ;
+// 	  }
+// 
+// 	  //ln p = -lambda + x*ln(lambda) - Sum_1tox (ln(x))
+// 	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
+// 
+// 	}
+//       }
+//     } else {
+//       // only the cases listed in 'i' are retained
+//       size_t length_i = static_cast<size_t>(LENGTH(i));
+//       Rcpp::IntegerVector vec_i(i);
+//       for (size_t k = 0; k < length_i; k++) {
+// 	size_t j = vec_i[k] - 1; // offset
+// 	if (alpha[j] != NA_INTEGER) {
+// 	  lambda = poisson_scale * n_cases[j];
+// 	  sumFact = 0;
+// 	  for(int ii=1; ii<=potential_colonised[j]; ii++) {
+// 	    sumFact += log(ii) ;
+// 	  }
+// 	  out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
+// 	}
+//       }
+//     }
+// 
+//     return out;
+//   }  else { // use of a customized likelihood function
+//     Rcpp::Function f = Rcpp::as<Rcpp::Function>(custom_function);
+// 
+//     return Rcpp::as<double>(f(data, param));
+//   }
+// }
+// 
+// double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, size_t i,
+// 				  Rcpp::RObject custom_function) {
+//   SEXP si = PROTECT(Rcpp::wrap(i));
+//   double ret = cpp_ll_potential_colonised(data, param, si, custom_function);
+//   UNPROTECT(1);
+//   return ret;
+// }
 
-    Rcpp::IntegerVector alpha = param["alpha"];
-    Rcpp::IntegerVector n_cases ;
-    Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
-    
-    
-    double poisson_scale = param["poisson_scale"];
-    double sumFact = 0;
-    double lambda = 0;
-    
-    //check if n_cases == NULL, if yes, return 0
-    if( data["n_cases"] == R_NilValue){
-      return 0.0;
-    }else{
-      n_cases = data["n_cases"];
-    }
-
-    if (i == R_NilValue) {
-      for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
-        if (alpha[j] != NA_INTEGER) {
-          //out = R::dpois(potential_colonised,scale_poisson*n_cases, log = true) ;
-          //sorry quicker with the log dpois formula :-)
-          lambda = poisson_scale * n_cases[j]; 
-          sumFact = 0;
-          
-          for(int ii=1; ii<=potential_colonised[j]; ii++) {
-            sumFact += log(ii) ;
-          }
-          
-          //ln p = -lambda + x*ln(lambda) - Sum_1tox (ln(x))
-          out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
-          
-        }
-      }
-    } else {
-      // only the cases listed in 'i' are retained
-      size_t length_i = static_cast<size_t>(LENGTH(i));
-      Rcpp::IntegerVector vec_i(i);
-      for (size_t k = 0; k < length_i; k++) {
-        size_t j = vec_i[k] - 1; // offset
-        if (alpha[j] != NA_INTEGER) {
-          lambda = poisson_scale * n_cases[j]; 
-          sumFact = 0;
-          for(int ii=1; ii<=potential_colonised[j]; ii++) {
-            sumFact += log(ii) ;
-          }
-          out += -lambda + potential_colonised[j]*log(lambda) - sumFact;
-        }
-      }
-    }
-    
-    return out;
-  }  else { // use of a customized likelihood function
-    Rcpp::Function f = Rcpp::as<Rcpp::Function>(custom_function);
-    
-    return Rcpp::as<double>(f(data, param));
-  }
-}
-
-double cpp_ll_potential_colonised(Rcpp::List data, Rcpp::List param, size_t i,
-				  Rcpp::RObject custom_function) {
-  SEXP si = PROTECT(Rcpp::wrap(i));
-  double ret = cpp_ll_potential_colonised(data, param, si, custom_function);
-  UNPROTECT(1);
-  return ret;
-}
 
 
 // ---------------------------
@@ -630,33 +624,18 @@ double cpp_ll_timing(Rcpp::List data, Rcpp::List param, size_t i,
 
 // ---------------------------
 
-// This likelihood corresponds to the probability of observing a reported
-// contact between cases and their ancestors. See
-// src/likelihoods.cpp for details of the Rcpp implmentation.
-
-// The likelihood is based on the contact status between a case and its
-// ancestor; this is extracted from a pairwise contact matrix (data$C), the
-// log-likelihood is computed as:
-// true_pos*eps + false_pos*eps*xi +
-// false_neg*(1- eps) + true_neg*(1 - eps*xi)
-//
-// with:
-// 'eps' is the contact reporting coverage
-// 'lambda' is the non-infectious contact rate
-// 'true_pos' is the number of contacts between transmission pairs
-// 'false_pos' is the number of contact between non-transmission pairs
-// 'false_neg' is the number of transmission pairs without contact
-// 'true_neg' is the number of non-transmission pairs without contact
-
 // The likelihood is based on the patient transfer matrix and the probability
-// that an unobserved colonized patients will be moved from hospital A to 
-// hospital B. This probability is given by : 
-// p(A->B) = 1 - (1 - sigma * q_ab)^N_unobs
+// that an unobserved colonized patients from hospital A will colonised hospital B
+// without being colonised by another hospital l which could be the ancestor of B.
+// This probability is given by : 
+// p(A->B) = (1 - (1 - sigma * q_alpha_b)^N_unobs_alpha)*PI((1 - sigma * q_l_b)^N_unobs_l)
 //
 // with:
 // sigma being the parameter controling the probability of being transfered
-// q_ab being the probability of being transfered to b when you're leaving a
-// N_unobs
+// q_alpha_b being the probability of being transfered to B when you're leaving A
+// N_unobs_alpha being the number of unobserved colonised patient in A
+// q_l_b being the probability of being transfered to B when you're leaving an hospital l
+// N_unobs_l being the number of unobserved colonised patient in hospital l
 
 double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
                       Rcpp::RObject custom_function) {
@@ -669,11 +648,15 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
   
   if (custom_function == R_NilValue) {
     double out = 0;
-    double q_ab = 0;
+    double q_alpha_b = 0;
+    double q_lb = 0;
     double sigma = Rcpp::as<double>(param["sigma"]);
+    double product = 1; //To keep the results of the product of probabilities of non transmission of others facilities
     Rcpp::IntegerVector potential_colonised = param["potential_colonised"];
     Rcpp::IntegerVector alpha = param["alpha"];
     Rcpp::IntegerVector id_in_hosp_matrix = data["id_in_hosp_matrix"];
+    Rcpp::IntegerVector t_inf = param["t_inf"];
+    Rcpp::IntegerVector ids_facilities = Rcpp::seq_len(N)-1;
 
     if (sigma < 0.0) {
       return R_NegInf;
@@ -681,24 +664,41 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, SEXP i,
     
     if (i == R_NilValue) {
       for (size_t j = 0; j < N; j++) { // 'j' on 0:(N-1)
-	if (alpha[j] != NA_INTEGER) {
-	  q_ab = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
-			     id_in_hosp_matrix[j]-1);
-	  if (q_ab != 0){
-	    out += log(1 - pow((1 - sigma * q_ab), potential_colonised[j])); 
-	  }
-	}
+        product = 1;
+        // Rcpp::Rcout << "j = " << j << std::endl;
+        // Rcpp::Rcout << "alpha = " << alpha[j] << std::endl;
+        if (alpha[j] != NA_INTEGER) {
+          // Estimating the probability of not being colonised by a facility other than the ancestor one
+          Rcpp::LogicalVector loop_boolean = t_inf < t_inf[j]; // Identification of possible ancestors
+          loop_boolean[alpha[j]-1] = FALSE; // Exclusion of the ancestor of j
+          Rcpp::IntegerVector loop = ids_facilities[loop_boolean]; // Selection of corresponding ids
+          
+          for (size_t l = 0; l < loop.size(); l++) {
+              q_lb = hosp_matrix(id_in_hosp_matrix[loop[l]]-1,
+                                 id_in_hosp_matrix[j]-1);
+            if(q_lb)
+              product *= pow((1 - sigma * q_lb), potential_colonised[loop[l]]);
+
+          }
+          // Adding the probability of transmission from the considered ancestor 
+          q_alpha_b = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
+                                  id_in_hosp_matrix[j]-1);
+          if (q_alpha_b != 0){
+            out += log((1 - pow((1 - sigma * q_alpha_b), potential_colonised[alpha[j]-1])) * product); 
+          }
+        }
       }
     } else {
+      // TO BE MODIFIED ACCORDING TO PREVIOUS SECTION 
       // only the cases listed in 'i' are retained
       size_t length_i = static_cast<size_t>(LENGTH(i));
       Rcpp::IntegerVector vec_i(i);
       for (size_t k = 0; k < length_i; k++) {
 	size_t j = vec_i[k] - 1; // offset
 	if (alpha[j] != NA_INTEGER) {
-	  q_ab = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
+	  q_alpha_b = hosp_matrix(id_in_hosp_matrix[alpha[j]-1]-1,
 			     id_in_hosp_matrix[j]-1);
-	  out += log(1 - pow((1 - sigma * q_ab), potential_colonised[j]));
+	  out += log(1 - pow((1 - sigma * q_alpha_b), potential_colonised[j]));
 	}
       }
     }
@@ -730,27 +730,27 @@ double cpp_ll_patient_transfer(Rcpp::List data, Rcpp::List param, size_t i,
 // - p(potential_colonised): see function cpp_ll_potential_colonised
 // - p(patient_transfer): see function cpp_ll_patient_transfer
 
-double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, SEXP i,
-		      Rcpp::RObject custom_functions) {
-
-  if (custom_functions == R_NilValue) {
-    return cpp_ll_potential_colonised(data, param, i) +
-      cpp_ll_patient_transfer(data, param, i);
-  } else { // use of a customized likelihood functions
-    Rcpp::List list_functions = Rcpp::as<Rcpp::List>(custom_functions);
-    return cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
-      cpp_ll_patient_transfer(data, param, i, list_functions["patient_transfer"]);
-  }
-}
-
-
-double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, size_t i,
-			 Rcpp::RObject custom_function) {
-  SEXP si = PROTECT(Rcpp::wrap(i));
-  double ret = cpp_ll_hosp_joint(data, param, si, custom_function);
-  UNPROTECT(1);
-  return ret;
-}
+// double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, SEXP i,
+// 		      Rcpp::RObject custom_functions) {
+// 
+//   if (custom_functions == R_NilValue) {
+//     return cpp_ll_potential_colonised(data, param, i) +
+//       cpp_ll_patient_transfer(data, param, i);
+//   } else { // use of a customized likelihood functions
+//     Rcpp::List list_functions = Rcpp::as<Rcpp::List>(custom_functions);
+//     return cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
+//       cpp_ll_patient_transfer(data, param, i, list_functions["patient_transfer"]);
+//   }
+// }
+// 
+// 
+// double cpp_ll_hosp_joint(Rcpp::List data, Rcpp::List param, size_t i,
+// 			 Rcpp::RObject custom_function) {
+//   SEXP si = PROTECT(Rcpp::wrap(i));
+//   double ret = cpp_ll_hosp_joint(data, param, si, custom_function);
+//   UNPROTECT(1);
+//   return ret;
+// }
 
 
 // ---------------------------
@@ -775,7 +775,7 @@ double cpp_ll_all(Rcpp::List data, Rcpp::List param, SEXP i,
     return cpp_ll_timing_infections(data, param, i) +
       cpp_ll_timing_sampling(data, param, i) +
       cpp_ll_genetic(data, param, i) +
-      cpp_ll_potential_colonised(data, param, i) +
+      // cpp_ll_potential_colonised(data, param, i) +
       cpp_ll_reporting(data, param, i) +
       cpp_ll_contact(data, param, i) +
       cpp_ll_patient_transfer(data, param, i);
@@ -786,7 +786,7 @@ double cpp_ll_all(Rcpp::List data, Rcpp::List param, SEXP i,
     return cpp_ll_timing_infections(data, param, i, list_functions["timing_infections"]) +
       cpp_ll_timing_sampling(data, param, i, list_functions["timing_sampling"]) +
       cpp_ll_genetic(data, param, i, list_functions["genetic"]) +
-      cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
+      // cpp_ll_potential_colonised(data, param, i, list_functions["potential_colonised"]) +
       cpp_ll_reporting(data, param, i, list_functions["reporting"]) +
       cpp_ll_contact(data, param, i, list_functions["contact"]) + 
       cpp_ll_patient_transfer(data, param, i, list_functions("patient_transfer"));
