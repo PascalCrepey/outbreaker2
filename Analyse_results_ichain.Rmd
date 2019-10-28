@@ -170,6 +170,9 @@ no_scenarii <- 3
 # Location of rds files: Genouest or Ordi #
 location <- "Genouest"
 
+# Type of chains #
+type <- "incomplete"
+
 # Study links not retrieved by the DLF #
 NotRetrieved <- TRUE
 
@@ -177,7 +180,7 @@ NotRetrieved <- TRUE
 StudyKappa <- TRUE
 
 # Burning period #
-vec_burning <- rep(500, no_scenarii)
+vec_burning <- rep(5000, no_scenarii)
 # Thinning #
 thinning <- rep(5, no_scenarii)
 # No iterations #
@@ -194,10 +197,13 @@ result_function <- lapply(1:no_scenarii,
                           ParametersSynthesis, 
                           vec_burning = vec_burning,
                           location = location,
+                          type = type,
                           NotRetrieved = NotRetrieved, 
                           chains_detect100_bind = chains_detect100_bind,
                           StudyKappa = StudyKappa,
-                          new_chains_added = new_chains_to_add)
+                          new_chains_added = new_chains_to_add,
+                          NewBurning = TRUE,
+                          min.support = min.support)
 
 ############################################
 #### Creating main output of parameters ####

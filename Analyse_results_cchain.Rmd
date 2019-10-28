@@ -91,6 +91,9 @@ no_scenarii <- 3
 # Genouest or Ordi #
 location <- "Genouest"
 
+# Type: complete or incomplete #
+type <- "complete"
+
 # Loading of data #
 # results_1 <- readRDS("./tmp_results/Ordi/1-results_50000_5_parLapply_scenario1.rds")
 # results_2 <- readRDS("./tmp_results/Genouest/1-results_50000_5_parLapply_scenario2.rds")
@@ -100,7 +103,7 @@ location <- "Genouest"
 #### Global variables ####
 ##########################
 # Burning period #
-vec_burning <- rep(500, no_scenarii)
+vec_burning <- rep(5000, no_scenarii)
 # Thinning #
 thinning <- rep(5, no_scenarii)
 # No iterations #
@@ -117,8 +120,12 @@ result_function <- lapply(1:no_scenarii,
                           ParametersSynthesis, 
                           vec_burning = vec_burning,
                           location = location,
+                          type = type,
                           NotRetrieved = FALSE,
-                          StudyKappa = FALSE)
+                          StudyKappa = FALSE,
+                          chains_detect100_bind = chains_detect100_bind,
+                          NewBurning = TRUE,
+                          min.support = min.support)
 
 output <- t(cbind(no_iter = no_iter,
                   thinning = thinning,
@@ -126,7 +133,7 @@ output <- t(cbind(no_iter = no_iter,
                   adding_noise = adding_noise,
                   rbindlist(lapply(result_function,
                                    function(r) {
-                                     r$output
+                                     r$parameters
                                      }
                                    )
                             )
