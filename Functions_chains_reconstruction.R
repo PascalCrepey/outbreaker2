@@ -29,7 +29,7 @@ library(ggrepel)
 #### Function to compute priors ####
 ####################################
 # Function to compute priors for alpha #
-prior_ancestor <- function(x, imported, data_outbreaker, fakeMat){
+prior_ancestor <- function(x, imported, data_outbreaker, fakeMat, ids){
   if(is.na(imported[x]))
     ancestor <- NA
   else{
@@ -142,8 +142,8 @@ get_labels <- function(x, labels = NULL) {
 #### Functions related to the estimation of parameters (sensitivity, specificity) ####
 ######################################################################################
 ## Main function to compute sensitivity and specificity ##
-ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.support,
-                              burning = 0, init_alpha){
+ComputeParameters <- function(results_bayesian, real_data, min.support,
+                              burning = 0, init_alpha, ids){
   ## Preparing data (merging with real data) ##
   # cat("--- Preparing data ---")
   if(burning < 0) 
@@ -179,7 +179,7 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
   }
   else{ # Considering a burning period
     # Calculating consensus and all ancestors with burning period #
-    tmp <- CreateOutputBayesian(results_bayesian$res, ids, burning = burning,
+    tmp <- CreateOutputBayesian(results_bayesian$res, ids = ids, burning = burning,
                                 init_alpha = init_alpha)
     merged_consensus <- merge(tmp$consensus,
                               real_data[, .(from, to, 
@@ -217,8 +217,7 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
   # Consensus ancestor #
   parameters_links_consensus <- ComputeParametersLinks(data = merged_consensus, 
                                            min.support = NULL, 
-                                           type = "consensus", 
-                                           outbreaker_data = data_outbreaker)
+                                           type = "consensus")
   
   global_chains_consensus <- ComputeParametersChains_global(data = merged_consensus,
                                                                 real_data = real_data)
@@ -230,8 +229,7 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
   # All ancestors #
   parameters_links_aa <- ComputeParametersLinks(data = merged_aa, 
                                           min.support = min.support, 
-                                          type = "aa", 
-                                          outbreaker_data = data_outbreaker)
+                                          type = "aa")
   
   global_chains_aa <- sapply(min.support, 
                                   FUN = ComputeParametersChains_global,
@@ -260,7 +258,7 @@ ComputeParameters <- function(results_bayesian, data_outbreaker, real_data, min.
 
 ## Auxiliary functions ##
 # Auxiliary function to compute parameters regarding links #
-ComputeParametersLinks <- function(data, min.support = NULL, type, outbreaker_data){
+ComputeParametersLinks <- function(data, min.support = NULL, type){
   if(is.null(min.support)){
     # True positive #
     assign(paste0("tp_links.",type),true_positive_links(data = data))
@@ -507,7 +505,8 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
                        FUN = prior_ancestor,
                        imported = imported,
                        data_outbreaker = data_outbreaker,
-                       fakeMat = fakeMat)
+                       fakeMat = fakeMat,
+                       ids = ids)
   }
   
   # Config parameters #
@@ -536,11 +535,11 @@ ChainsReconstruction <- function(dates, w, n_cases, fakeMat, ids,
   
   ## Estimation of parameters ##
   parameters <- ComputeParameters(results_bayesian = results_mcmc,
-                                  data_outbreaker = data_outbreaker,
                                   real_data = chains_detect100_bind,
                                   min.support = min.support,
                                   burning = burning,
-                                  init_alpha = imported)
+                                  init_alpha = imported,
+                                  ids = ids)
   
   return(list(results_mcmc = results_mcmc,
               parameters = parameters))
@@ -571,7 +570,8 @@ RealChainsReconstruction <- function(dates, w, n_cases, transfers, ids,
                        FUN = prior_ancestor,
                        imported = imported,
                        data_outbreaker = data_outbreaker,
-                       fakeMat = transfers)
+                       fakeMat = transfers, 
+                       ids = ids)
   }
   
   # Config parameters #
